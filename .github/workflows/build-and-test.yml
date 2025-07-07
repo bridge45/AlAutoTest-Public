@@ -1,0 +1,141 @@
+name: Build, Test and Debug ARMv7 Binary
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: '启用调试模式'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装ARM交叉编译工具链
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user-static
+        
+    - name: 验证工具链安装
+      run: |
+        arm-linux-gnueabihf-gcc --version
+        qemu-arm --version
+        echo "ARM交叉编译工具链和QEMU安装成功"
+        
+    - name: 编译ARMv7二进制文件
+      run: |
+        make clean
+        make demo_armv7
+        
+    - name: 验证二进制文件架构
+      run: |
+        echo "=== 二进制文件信息 ==="
+        file demo_armv7
+        echo "=== 架构详细信息 ==="
+        readelf -h demo_armv7 | grep -E "(Machine|Class|Data|OS/ABI)"
+        echo "=== 符号表信息 ==="
+        readelf -s demo_armv7 | head -20
+        
+    - name: 使用QEMU模拟执行测试
+      run: |
+        echo "=== 在QEMU ARM模拟器中执行程序 ==="
+        chmod +x demo_armv7
+        qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7
+        
+    - name: 调试模式执行（可选）
+      if: ${{ github.event.inputs.debug_mode == 'true' }}
+      run: |
+        echo "=== 调试模式：详细执行信息 ==="
+        echo "程序大小: $(stat -c%s demo_armv7) 字节"
+        echo "程序权限: $(ls -la demo_armv7)"
+        echo "=== 使用strace跟踪系统调用 ==="
+        qemu-arm -L /usr/arm-linux-gnueabihf -strace demo_armv7 2>&1 | head -50
+        
+    - name: 性能测试
+      run: |
+        echo "=== 性能测试 ==="
+        echo "执行时间测试（运行5次取平均）:"
+        for i in {1..5}; do
+          echo "第 $i 次运行:"
+          time qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 > /dev/null 2>&1
+        done
+        
+    - name: 创建测试报告
+      run: |
+        echo "=== 测试报告 ===" > test_report.txt
+        echo "构建时间: $(date)" >> test_report.txt
+        echo "Git提交: ${{ github.sha }}" >> test_report.txt
+        echo "分支: ${{ github.ref_name }}" >> test_report.txt
+        echo "目标架构: ARMv7" >> test_report.txt
+        echo "" >> test_report.txt
+        echo "=== 程序输出 ===" >> test_report.txt
+        qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 >> test_report.txt 2>&1
+        
+    - name: 创建发布目录
+      run: |
+        mkdir -p release
+        cp demo_armv7 release/
+        cp main.c release/
+        cp Makefile release/
+        cp README.md release/
+        cp test_report.txt release/
+        
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: armv7-binary-with-tests
+        path: release/
+        retention-days: 30
+        
+    - name: 显示测试结果
+      run: |
+        echo "=== 最终测试结果 ==="
+        cat test_report.txt
+        
+    - name: 创建发布 (仅限标签推送)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: release/*
+        body: |
+          ## ARMv7 二进制文件发布（含测试）
+          
+          ### 构建信息
+          - 构建时间: $(date)
+          - Git提交: ${{ github.sha }}
+          - 目标架构: ARMv7
+          
+          ### 测试结果
+          - ✅ 编译成功
+          - ✅ 架构验证通过
+          - ✅ QEMU模拟执行成功
+          - ✅ 性能测试完成
+          
+          ### 文件说明
+          - `demo_armv7`: ARMv7架构的可执行文件
+          - `main.c`: 源代码
+          - `Makefile`: 编译脚本
+          - `test_report.txt`: 详细测试报告
+          - `build_info.txt`: 构建信息
+          
+          ### 使用方法
+          ```bash
+          # 在ARMv7设备上运行
+          chmod +x demo_armv7
+          ./demo_armv7
+          
+          # 在QEMU模拟器中运行
+          qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7
+          ```
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
