@@ -34,7 +34,7 @@ int main() {
     
     // 测试数学运算
     int a = 10, b = 5;
-    printf("数学运算测试:\n");
+    printf("数学运算测试AAA:\n");
     printf("%d + %d = %d\n", a, b, add(a, b));
     printf("%d * %d = %d\n", a, b, multiply(a, b));
     printf("%.2f ^ %.2f = %.2f\n", 2.0, 3.0, power(2.0, 3.0));

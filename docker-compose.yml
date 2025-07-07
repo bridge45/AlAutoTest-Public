@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   armv7-dev:
-    build: .
+    build: ./docker
     container_name: armv7-dev
     volumes:
       - .:/workspace
