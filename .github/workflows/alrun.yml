@@ -22,12 +22,12 @@ jobs:
         docker build -t alautotest:latest -f docker/Dockerfile .
         echo "✅ Docker 镜像构建完成"
           
-    - name: 在 Docker 容器中执行 run.sh
+    - name: 在 Docker 容器中执行 scripts/run.sh
       run: |
-        echo "🚀 在 Docker 容器中执行 run.sh..."
+        echo "🚀 在 Docker 容器中执行 scripts/run.sh..."
         docker run --rm \
           -v "$(pwd):/workspace" \
           -w /workspace \
           alautotest:latest \
-          bash -c "chmod +x run.sh && ./run.sh && echo '=== 执行结果如下 ===' && cat <(echo '--- stdout ---') <(./run.sh)"
-        echo "✅ run.sh 执行完成"
+          bash -c "chmod +x scripts/run.sh && scripts/run.sh && echo '=== 执行结果如下 ===' && cat <(echo '--- stdout ---') <(scripts/run.sh)"
+        echo "✅ scripts/run.sh 执行完成"

@@ -41,11 +41,6 @@ RUN cd /tmp && \
 # 设置工作目录
 WORKDIR /workspace
 
-# 复制项目文件
-COPY . .
-
-# 设置权限
-RUN chmod +x run.sh build.sh dev.sh test_quickjs.sh tmp_install_quickjs.sh 2>/dev/null || echo "设置脚本权限完成"
 
 # 设置环境变量
 ENV ARM_CC="arm-linux-gnueabihf-gcc"
