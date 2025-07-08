@@ -2,10 +2,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <dirent.h>
+#include <sys/wait.h>
 
 // QuickJS 头文件（条件编译）
 #ifdef QUICKJS_AVAILABLE
 #include "quickjs.h"
+#endif
+
+// BearSSL 头文件（条件编译）
+#ifdef BEARSSL_AVAILABLE
+#include "bearssl.h"
 #endif
 
 // 简单的数学运算函数
@@ -30,6 +42,74 @@ void reverse_string(char* str) {
         str[length - 1 - i] = temp;
     }
 }
+
+#ifdef BEARSSL_AVAILABLE
+// HTTPS 请求函数
+char* https_request(const char* host, const char* path, int port) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        fprintf(stderr, "无法创建socket\n");
+        return NULL;
+    }
+    
+    struct hostent *server = gethostbyname(host);
+    if (server == NULL) {
+        fprintf(stderr, "无法解析主机名: %s\n", host);
+        close(sock);
+        return NULL;
+    }
+    
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
+    
+    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        fprintf(stderr, "连接失败\n");
+        close(sock);
+        return NULL;
+    }
+    
+    // 构建HTTP请求
+    char request[1024];
+    snprintf(request, sizeof(request),
+        "GET %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Connection: close\r\n"
+        "\r\n", path, host);
+    
+    if (send(sock, request, strlen(request), 0) < 0) {
+        fprintf(stderr, "发送请求失败\n");
+        close(sock);
+        return NULL;
+    }
+    
+    // 接收响应
+    char buffer[4096];
+    char* response = malloc(8192);
+    response[0] = '\0';
+    int total_size = 0;
+    
+    int bytes_received;
+    while ((bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
+        buffer[bytes_received] = '\0';
+        strcat(response, buffer);
+        total_size += bytes_received;
+        
+        if (total_size > 8000) break; // 防止缓冲区溢出
+    }
+    
+    close(sock);
+    return response;
+}
+#else
+// BearSSL不可用时的占位函数
+char* https_request(const char* host, const char* path, int port) {
+    fprintf(stderr, "BearSSL 功能不可用\n");
+    return NULL;
+}
+#endif
 
 // 读取文件内容
 char* read_file_content(const char* filename) {
@@ -72,6 +152,37 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_UNDEFINED;
 }
 
+// https_request 实现
+static JSValue js_https_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)this_val;
+    if (argc < 3) {
+        return JS_EXCEPTION;
+    }
+    
+    const char* host = JS_ToCString(ctx, argv[0]);
+    const char* path = JS_ToCString(ctx, argv[1]);
+    int port;
+    JS_ToInt32(ctx, &port, argv[2]);
+    
+    if (!host || !path) {
+        if (host) JS_FreeCString(ctx, host);
+        if (path) JS_FreeCString(ctx, path);
+        return JS_EXCEPTION;
+    }
+    
+    char* response = https_request(host, path, port);
+    JS_FreeCString(ctx, host);
+    JS_FreeCString(ctx, path);
+    
+    if (response) {
+        JSValue result = JS_NewString(ctx, response);
+        free(response);
+        return result;
+    }
+    
+    return JS_NULL;
+}
+
 // 执行 JavaScript 代码
 int execute_javascript(const char* js_code, const char* filename) {
     JSRuntime* rt = JS_NewRuntime();
@@ -95,6 +206,11 @@ int execute_javascript(const char* js_code, const char* filename) {
     JSValue console_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, console_obj, "log", JS_NewCFunction(ctx, js_console_log, "log", 1));
     JS_SetPropertyStr(ctx, global_obj, "console", console_obj);
+    
+    // 添加 https_request 函数到全局对象
+    JS_SetPropertyStr(ctx, global_obj, "https_request", 
+        JS_NewCFunction(ctx, js_https_request, "https_request", 3));
+    
     JS_FreeValue(ctx, global_obj);
     
     // 执行 JavaScript 代码
@@ -170,30 +286,87 @@ int main() {
     // 测试 QuickJS
     printf("\n=== QuickJS 测试 ===\n");
     
-    // 读取并执行 test.js
-    char* js_content = read_file_content("worker/test.js");
-    if (js_content) {
-        printf("执行 worker/test.js 文件:\n");
-        if (execute_javascript(js_content, "worker/test.js") == 0) {
-            printf("JavaScript 执行成功!\n");
-        } else {
-            printf("JavaScript 执行失败!\n");
-        }
-        free(js_content);
+    // 自动遍历 worker 目录下的所有 .js 文件
+    DIR *dir;
+    char worker_dir[512];
+    
+    // 获取当前工作目录
+    char cwd[256];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        snprintf(worker_dir, sizeof(worker_dir), "%s/worker", cwd);
     } else {
-        printf("无法读取 worker/test.js 文件，执行内联 JavaScript 测试:\n");
+        strcpy(worker_dir, "worker");
+    }
+    
+    printf("扫描目录: %s\n", worker_dir);
+    dir = opendir(worker_dir);
+    
+    if (dir != NULL) {
+        printf("开始自动执行 JavaScript 文件:\n");
+        int executed_count = 0;
         
-        // 执行内联 JavaScript 代码
-        const char* inline_js = 
-            "console.log('内联 JavaScript 测试');"
-            "console.log('2 + 3 =', 2 + 3);"
-            "console.log('Math.PI =', Math.PI);"
-            "console.log('Hello from QuickJS!');";
+        // 使用 shell 命令读取目录内容
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "ls -1 %s/*.js 2>/dev/null", worker_dir);
         
-        if (execute_javascript(inline_js, "<inline>") == 0) {
-            printf("内联 JavaScript 执行成功!\n");
+        FILE* pipe = popen(cmd, "r");
+        if (pipe != NULL) {
+            char line[512];
+            while (fgets(line, sizeof(line), pipe)) {
+                // 移除换行符
+                line[strcspn(line, "\n")] = 0;
+                
+                // 提取文件名
+                char* filename = strrchr(line, '/');
+                if (filename) {
+                    filename++; // 跳过 '/'
+                } else {
+                    filename = line;
+                }
+                
+                printf("\n--- 自动执行: %s ---\n", filename);
+                char* js_content = read_file_content(line);
+                if (js_content) {
+                    if (execute_javascript(js_content, line) == 0) {
+                        printf("✅ %s 执行成功!\n", filename);
+                        executed_count++;
+                    } else {
+                        printf("❌ %s 执行失败!\n", filename);
+                    }
+                    free(js_content);
+                } else {
+                    printf("❌ 无法读取文件: %s\n", line);
+                }
+            }
+            pclose(pipe);
         } else {
-            printf("内联 JavaScript 执行失败!\n");
+            printf("无法执行 ls 命令\n");
+        }
+        
+        closedir(dir);
+        printf("\n=== 自动执行完成，共执行 %d 个 JavaScript 文件 ===\n", executed_count);
+    } else {
+        printf("无法打开目录 %s，尝试直接执行已知文件\n", worker_dir);
+        
+        // 备用方案：直接执行已知文件
+        const char* js_files[] = {"worker/test.js", "worker/https_test.js"};
+        int num_files = sizeof(js_files) / sizeof(js_files[0]);
+        
+        for (int i = 0; i < num_files; i++) {
+            const char* filepath = js_files[i];
+            printf("\n--- 执行文件: %s ---\n", filepath);
+            
+            char* js_content = read_file_content(filepath);
+            if (js_content) {
+                if (execute_javascript(js_content, filepath) == 0) {
+                    printf("✅ %s 执行成功!\n", filepath);
+                } else {
+                    printf("❌ %s 执行失败!\n", filepath);
+                }
+                free(js_content);
+            } else {
+                printf("❌ 无法读取文件: %s\n", filepath);
+            }
         }
     }
 #else

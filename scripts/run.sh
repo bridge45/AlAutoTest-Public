@@ -48,6 +48,9 @@ compile_arm() {
     local cflags="-Wall -Wextra -O2 -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-unused-parameter -Wno-cast-function-type"
     local quickjs_include=""
     local quickjs_lib=""
+    local bearssl_include=""
+    local bearssl_lib=""
+    
     if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
         if [ -f "$QUICKJS_ROOT/quickjs.h" ] && [ -f "$QUICKJS_ROOT/libquickjs.a" ]; then
             quickjs_include="-I$QUICKJS_ROOT"
@@ -65,8 +68,21 @@ compile_arm() {
     else
         print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
     fi
+    
+    if [ -n "$BEARSSL_ROOT" ] && [ -d "$BEARSSL_ROOT" ]; then
+        if [ -f "$BEARSSL_ROOT/bearssl.h" ] && [ -f "$BEARSSL_ROOT/libbearssl.a" ]; then
+            bearssl_include="-I$BEARSSL_ROOT"
+            bearssl_lib="-L$BEARSSL_ROOT -lbearssl"
+            cflags="$cflags -DBEARSSL_AVAILABLE"
+            print_info "检测到 BearSSL: $BEARSSL_ROOT/bearssl.h, $BEARSSL_ROOT/libbearssl.a"
+        else
+            print_warning "BearSSL 头文件或库文件不存在: $BEARSSL_ROOT/bearssl.h 或 $BEARSSL_ROOT/libbearssl.a"
+        fi
+    else
+        print_warning "未检测到 BearSSL 环境，将编译不包含 HTTPS 功能的版本"
+    fi
     mkdir -p build
-    $cc $cflags $quickjs_include -o $output src/main.c -lm $quickjs_lib
+    $cc $cflags $quickjs_include $bearssl_include -o $output src/main.c -lm $quickjs_lib $bearssl_lib
     print_success "编译完成: $output"
     echo "$output"
 }
