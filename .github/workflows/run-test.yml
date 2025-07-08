@@ -25,7 +25,14 @@ jobs:
           g++-arm-linux-gnueabihf \
           qemu-user-static \
           binutils-arm-linux-gnueabihf \
-          make
+          make \
+          build-essential \
+          git \
+          wget \
+          pkg-config \
+          libtool \
+          autoconf \
+          automake
         
     - name: 验证工具链安装
       run: |
@@ -45,14 +52,58 @@ jobs:
         chmod +x build.sh
         chmod +x dev.sh
         chmod +x test_quickjs.sh
+        chmod +x tmp_install_quickjs.sh
         echo "✅ 脚本权限设置完成"
+        
+    - name: 安装 QuickJS
+      run: |
+        echo "🔧 安装 QuickJS..."
+        ./tmp_install_quickjs.sh
+        echo "✅ QuickJS 安装完成"
+        
+    - name: 验证 QuickJS 安装
+      run: |
+        echo "🔍 验证 QuickJS 安装..."
+        export QUICKJS_ROOT="/tmp/quickjs_install"
+        export PATH="$QUICKJS_ROOT/bin:$PATH"
+        
+        if [ -f "$QUICKJS_ROOT/bin/qjs" ]; then
+          echo "✅ QuickJS 可执行文件存在"
+          echo "版本信息:"
+          $QUICKJS_ROOT/bin/qjs --version
+        else
+          echo "❌ QuickJS 可执行文件不存在"
+          exit 1
+        fi
+        
+        if [ -f "$QUICKJS_ROOT/include/quickjs.h" ]; then
+          echo "✅ QuickJS 头文件存在"
+        else
+          echo "❌ QuickJS 头文件不存在"
+          exit 1
+        fi
+        
+        if [ -f "$QUICKJS_ROOT/lib/libquickjs.a" ]; then
+          echo "✅ QuickJS 库文件存在"
+        else
+          echo "❌ QuickJS 库文件不存在"
+          exit 1
+        fi
         
     - name: 执行 run.sh 脚本
       run: |
         echo "🚀 开始执行 run.sh 脚本..."
         echo "----------------------------------------"
-        # 设置环境变量，确保脚本能正常运行
-        export QUICKJS_ROOT=""
+        # 设置 QuickJS 环境变量
+        export QUICKJS_ROOT="/tmp/quickjs_install"
+        export PATH="$QUICKJS_ROOT/bin:$PATH"
+        export PKG_CONFIG_PATH="$QUICKJS_ROOT/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export LD_LIBRARY_PATH="$QUICKJS_ROOT/lib:$LD_LIBRARY_PATH"
+        
+        echo "QuickJS 环境变量设置:"
+        echo "QUICKJS_ROOT=$QUICKJS_ROOT"
+        echo "PATH=$PATH"
+        
         ./run.sh
         echo "----------------------------------------"
         echo "✅ run.sh 脚本执行完成"
