@@ -47,20 +47,16 @@ rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 cd "$TEMP_DIR"
 
-# 下载 QuickJS
+# 下载 QuickJS（采用与Dockerfile相同的方法）
 echo "下载 QuickJS 源码..."
 QUICKJS_VERSION="2021-03-27"
 QUICKJS_URL="https://bellard.org/quickjs/quickjs-${QUICKJS_VERSION}.tar.xz"
 
-if ! wget -q "$QUICKJS_URL"; then
-    echo "下载失败，尝试从 GitHub 获取..."
-    git clone --depth 1 https://github.com/bellard/quickjs.git
-    cd quickjs
-else
-    echo "解压 QuickJS 源码..."
-    tar -xf "quickjs-${QUICKJS_VERSION}.tar.xz"
-    cd "quickjs-${QUICKJS_VERSION}"
-fi
+echo "下载 QuickJS 源码包..."
+wget -q "$QUICKJS_URL"
+echo "解压 QuickJS 源码..."
+tar -xf "quickjs-${QUICKJS_VERSION}.tar.xz"
+cd "quickjs-${QUICKJS_VERSION}"
 
 # 安装到临时位置
 INSTALL_DIR="/tmp/quickjs_install"
@@ -71,24 +67,18 @@ mkdir -p "$INSTALL_DIR"
 echo "编译 QuickJS..."
 make
 
-# 检查是否需要 ARMv7 交叉编译
+# 编译ARMv7版本的QuickJS（采用与Dockerfile相同的方法）
 if command -v arm-linux-gnueabihf-gcc &> /dev/null; then
-    echo "检测到 ARM 交叉编译工具链，编译 ARMv7 版本..."
+    echo "检测到 ARM 交叉编译工具链，编译 ARMv7 版本的 QuickJS..."
+    
+    # 使用与Dockerfile相同的简单方法
     make clean
-    
-    # 手动编译ARMv7版本的QuickJS，避免Makefile问题
-    echo "手动编译ARMv7版本的QuickJS..."
-    arm-linux-gnueabihf-gcc -c -march=armv7-a -mfpu=neon -mfloat-abi=hard \
-        -DCONFIG_VERSION="2021-03-27" \
-        -DCONFIG_CHECK_JSVALUE \
-        -o quickjs.o quickjs.c
-    
-    arm-linux-gnueabihf-ar rcs libquickjs.a quickjs.o
+    make CC=arm-linux-gnueabihf-gcc
     
     # 创建 ARMv7 版本的库文件
     mkdir -p "$INSTALL_DIR/lib/armv7"
     cp libquickjs.a "$INSTALL_DIR/lib/armv7/"
-    echo "ARMv7 版本编译完成"
+    echo "ARMv7 版本 QuickJS 编译完成"
 else
     echo "未检测到 ARM 交叉编译工具链，跳过 ARMv7 版本编译"
 fi

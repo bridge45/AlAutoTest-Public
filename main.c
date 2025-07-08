@@ -3,8 +3,10 @@
 #include <string.h>
 #include <math.h>
 
-// QuickJS 头文件
+// QuickJS 头文件（条件编译）
+#ifdef QUICKJS_AVAILABLE
 #include "quickjs.h"
+#endif
 
 // 简单的数学运算函数
 int add(int a, int b) {
@@ -54,6 +56,7 @@ char* read_file_content(const char* filename) {
     return content;
 }
 
+#ifdef QUICKJS_AVAILABLE
 // console.log 实现
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     (void)this_val; // 明确表示不使用此参数
@@ -123,6 +126,13 @@ int execute_javascript(const char* js_code, const char* filename) {
     JS_FreeRuntime(rt);
     return 0;
 }
+#else
+// 当QuickJS不可用时的占位函数
+int execute_javascript(const char* js_code, const char* filename) {
+    printf("QuickJS 功能不可用，跳过 JavaScript 执行\n");
+    return 0;
+}
+#endif
 
 // 主函数
 int main() {
@@ -144,6 +154,7 @@ int main() {
     reverse_string(message);
     printf("反转后: %s\n", message);
     
+#ifdef QUICKJS_AVAILABLE
     // 测试 QuickJS
     printf("\n=== QuickJS 测试 ===\n");
     
@@ -173,6 +184,10 @@ int main() {
             printf("内联 JavaScript 执行失败!\n");
         }
     }
+#else
+    printf("\n=== QuickJS 测试 ===\n");
+    printf("QuickJS 功能在此版本中不可用\n");
+#endif
     
     printf("\n程序执行完成!\n");
     return 0;

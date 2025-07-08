@@ -92,19 +92,30 @@ compile() {
     local quickjs_include=""
     local quickjs_lib=""
     
-    # 检查 QuickJS 环境
-    if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
-        quickjs_include="-I$QUICKJS_ROOT"
-        quickjs_lib="-L$QUICKJS_ROOT -lquickjs"
-        print_info "检测到 QuickJS 环境: $QUICKJS_ROOT"
-    else
-        print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
-    fi
-    
     if [ "$target" = "arm" ]; then
         cc="arm-linux-gnueabihf-gcc"
         output="demo_armv7"
         cflags="$cflags -march=armv7-a -mfpu=neon -mfloat-abi=hard"
+        
+        # 检查 ARMv7 版本的 QuickJS
+        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ] && [ -f "$QUICKJS_ROOT/lib/armv7/libquickjs.a" ]; then
+            quickjs_include="-I$QUICKJS_ROOT"
+            quickjs_lib="-L$QUICKJS_ROOT/lib/armv7 -lquickjs"
+            cflags="$cflags -DQUICKJS_AVAILABLE"
+            print_info "检测到 ARMv7 QuickJS 环境: $QUICKJS_ROOT"
+        else
+            print_warning "未检测到 ARMv7 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
+        fi
+    else
+        # 检查 QuickJS 环境（本地版本）
+        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+            quickjs_include="-I$QUICKJS_ROOT"
+            quickjs_lib="-L$QUICKJS_ROOT -lquickjs"
+            cflags="$cflags -DQUICKJS_AVAILABLE"
+            print_info "检测到 QuickJS 环境: $QUICKJS_ROOT"
+        else
+            print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
+        fi
     fi
     
     if [ "$debug" = "true" ]; then
