@@ -53,3 +53,10 @@ jobs:
           alautotest:latest \
           bash -c "chmod +x scripts/run.sh && scripts/run.sh && echo '=== 执行结果如下 ===' && cat <(echo '--- stdout ---') <(scripts/run.sh)"
         echo "✅ scripts/run.sh 执行完成"
+        
+    - name: 成功通知
+      if: success()
+      run: |
+        echo "🎉 构建和测试成功完成！"
+        echo "✅ Docker镜像构建成功"
+        echo "✅ 脚本执行成功"

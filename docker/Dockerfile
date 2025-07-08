@@ -51,16 +51,23 @@ RUN cd /tmp && \
     rm -rf /tmp/bearssl-0.6* && \
     echo "BearSSL 安装完成"
 
-# 安装 libmicrohttpd
-RUN cd /tmp && \
-    wget -q https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.75.tar.gz && \
-    tar -xf libmicrohttpd-0.9.75.tar.gz && \
-    cd libmicrohttpd-0.9.75 && \
-    ./configure --host=arm-linux-gnueabihf --prefix=/opt/libmicrohttpd --disable-shared --enable-static && \
-    make && \
+    RUN cd /tmp && \
+    wget --tries=3 --timeout=30 -q https://mirrors.tuna.tsinghua.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.76.tar.gz && \
+    tar -xf libmicrohttpd-0.9.76.tar.gz && \
+    cd libmicrohttpd-0.9.76 && \
+    ./configure --host=arm-linux-gnueabihf \
+                --enable-static \
+                --disable-shared \
+                --disable-https \
+                --disable-doc \
+                --disable-examples \
+                --disable-curl \
+                --prefix=/opt/libmicrohttpd && \
+    make clean && \
+    make -j$(nproc) && \
     make install && \
     cd / && \
-    rm -rf /tmp/libmicrohttpd-0.9.75* && \
+    rm -rf /tmp/libmicrohttpd-0.9.76* && \
     echo "libmicrohttpd 安装完成"
 
 # 设置工作目录
