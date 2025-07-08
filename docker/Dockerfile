@@ -15,7 +15,28 @@ RUN apt-get update && apt-get install -y \
     make \
     vim \
     git \
+    wget \
+    pkg-config \
+    libtool \
+    autoconf \
+    automake \
     && rm -rf /var/lib/apt/lists/*
+
+# 安装 QuickJS
+RUN cd /tmp && \
+    wget -q https://bellard.org/quickjs/quickjs-2021-03-27.tar.xz && \
+    tar -xf quickjs-2021-03-27.tar.xz && \
+    cd quickjs-2021-03-27 && \
+    make && \
+    mkdir -p /opt/quickjs && \
+    cp quickjs.h /opt/quickjs/ && \
+    cp quickjs-libc.h /opt/quickjs/ && \
+    cp libquickjs.a /opt/quickjs/ && \
+    cp qjs /opt/quickjs/ && \
+    cp qjsc /opt/quickjs/ && \
+    cd / && \
+    rm -rf /tmp/quickjs-2021-03-27* && \
+    echo "QuickJS 安装完成"
 
 # 设置工作目录
 WORKDIR /workspace
@@ -24,11 +45,13 @@ WORKDIR /workspace
 COPY . .
 
 # 设置权限
-RUN chmod +x *.sh
+RUN chmod +x run.sh build.sh dev.sh test_quickjs.sh tmp_install_quickjs.sh 2>/dev/null || echo "设置脚本权限完成"
 
 # 设置环境变量
 ENV ARM_CC="arm-linux-gnueabihf-gcc"
 ENV ARM_CXX="arm-linux-gnueabihf-g++"
+ENV QUICKJS_ROOT="/opt/quickjs"
+ENV PATH="/opt/quickjs:$PATH"
 
 # 默认命令
 CMD ["/bin/bash"] 

@@ -65,6 +65,17 @@ check_dependencies() {
         fi
     fi
     
+    # 检查 QuickJS
+    if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+        if [ -f "$QUICKJS_ROOT/libquickjs.a" ] && [ -f "$QUICKJS_ROOT/quickjs.h" ]; then
+            print_success "QuickJS 环境检查通过: $QUICKJS_ROOT"
+        else
+            print_warning "QuickJS 环境不完整，某些文件缺失"
+        fi
+    else
+        print_warning "未检测到 QuickJS 环境变量或目录"
+    fi
+    
     return 0
 }
 
@@ -78,6 +89,17 @@ compile() {
     local cc="gcc"
     local output="demo"
     local cflags="-Wall -Wextra -std=c99"
+    local quickjs_include=""
+    local quickjs_lib=""
+    
+    # 检查 QuickJS 环境
+    if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+        quickjs_include="-I$QUICKJS_ROOT"
+        quickjs_lib="-L$QUICKJS_ROOT -lquickjs"
+        print_info "检测到 QuickJS 环境: $QUICKJS_ROOT"
+    else
+        print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
+    fi
     
     if [ "$target" = "arm" ]; then
         cc="arm-linux-gnueabihf-gcc"
@@ -95,8 +117,10 @@ compile() {
     print_debug "编译器: $cc"
     print_debug "输出文件: $output"
     print_debug "编译选项: $cflags"
+    print_debug "QuickJS 包含路径: $quickjs_include"
+    print_debug "QuickJS 库: $quickjs_lib"
     
-    $cc $cflags -o $output main.c -lm
+    $cc $cflags $quickjs_include -o $output main.c -lm $quickjs_lib
     
     print_success "编译完成: $output"
     echo "文件大小: $(stat -c%s $output 2>/dev/null || stat -f%z $output 2>/dev/null) 字节" >&2
