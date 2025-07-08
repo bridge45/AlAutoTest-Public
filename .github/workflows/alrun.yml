@@ -16,12 +16,26 @@ jobs:
     - name: 检出代码
       uses: actions/checkout@v4
       
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
     - name: 构建 Docker 镜像
-      run: |
-        echo "🐳 构建 Docker 镜像..."
-        docker build -t alautotest:latest -f docker/Dockerfile .
-        echo "✅ Docker 镜像构建完成"
-          
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile
+        push: false
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
     - name: 在 Docker 容器中执行 scripts/run.sh
       run: |
         echo "🚀 在 Docker 容器中执行 scripts/run.sh..."
