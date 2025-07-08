@@ -132,44 +132,34 @@ jobs:
               file demo* 2>/dev/null || echo '无demo文件'
               echo '查找所有demo文件:'
               find . -name "demo*" -type f 2>/dev/null || echo '未找到demo文件'
+              
+              echo '在容器中验证和测试...'
+              if [ -f 'demo_armv7' ]; then
+                echo '✅ ARMv7版本验证成功: demo_armv7'
+                echo '文件大小: \$(stat -c%s demo_armv7) 字节'
+                file demo_armv7
+                echo '架构信息:'
+                readelf -h demo_armv7 | grep -E '(Machine|Class|Data)'
+                
+                echo '🚀 在容器中测试运行...'
+                timeout 10s qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 || {
+                  exit_code=\$?
+                  if [ \$exit_code -eq 124 ]; then
+                    echo '⚠️  测试运行超时（这是正常的）'
+                  else
+                    echo '✅ 测试运行完成，退出码: \$exit_code'
+                  fi
+                }
+              else
+                echo '❌ ARMv7版本验证失败: demo_armv7 文件不存在'
+                exit 1
+              fi
             "
         fi
         echo "----------------------------------------"
         echo "✅ Docker 容器编译完成"
         
-    - name: 验证输出文件
-      run: |
-        echo "🔍 验证编译输出..."
-        if [ -f "demo_armv7" ]; then
-          echo "✅ ARMv7版本验证成功: demo_armv7"
-          echo "文件大小: $(stat -c%s demo_armv7) 字节"
-          file demo_armv7
-          echo "架构信息:"
-          readelf -h demo_armv7 | grep -E "(Machine|Class|Data)"
-          
-          # 快速测试运行
-          echo "🚀 快速测试运行..."
-          timeout 10s qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 || {
-            local exit_code=$?
-            if [ $exit_code -eq 124 ]; then
-              echo "⚠️  测试运行超时（这是正常的）"
-            else
-              echo "✅ 测试运行完成，退出码: $exit_code"
-            fi
-          }
-        else
-          echo "❌ ARMv7版本验证失败: demo_armv7 文件不存在"
-          exit 1
-        fi
-        
-        # 检查是否有本地版本（可选）
-        if [ -f "demo" ]; then
-          echo "✅ 本地版本验证成功: demo"
-          echo "文件大小: $(stat -c%s demo) 字节"
-          file demo
-        else
-          echo "⚠️  本地版本未编译（这是正常的，因为我们主要编译ARMv7版本）"
-        fi
+
         
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
