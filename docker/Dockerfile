@@ -51,6 +51,18 @@ RUN cd /tmp && \
     rm -rf /tmp/bearssl-0.6* && \
     echo "BearSSL 安装完成"
 
+# 安装 libmicrohttpd
+RUN cd /tmp && \
+    wget -q https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.75.tar.gz && \
+    tar -xf libmicrohttpd-0.9.75.tar.gz && \
+    cd libmicrohttpd-0.9.75 && \
+    ./configure --host=arm-linux-gnueabihf --prefix=/opt/libmicrohttpd --disable-shared --enable-static && \
+    make && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/libmicrohttpd-0.9.75* && \
+    echo "libmicrohttpd 安装完成"
+
 # 设置工作目录
 WORKDIR /workspace
 
@@ -60,7 +72,8 @@ ENV ARM_CC="arm-linux-gnueabihf-gcc"
 ENV ARM_CXX="arm-linux-gnueabihf-g++"
 ENV QUICKJS_ROOT="/opt/quickjs"
 ENV BEARSSL_ROOT="/opt/bearssl"
-ENV PATH="/opt/quickjs:/opt/bearssl:$PATH"
+ENV LIBMICROHTTPD_ROOT="/opt/libmicrohttpd"
+ENV PATH="/opt/quickjs:/opt/bearssl:/opt/libmicrohttpd/bin:$PATH"
 
 # 默认命令
 CMD ["/bin/bash"] 
