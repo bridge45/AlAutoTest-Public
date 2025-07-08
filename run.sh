@@ -88,7 +88,7 @@ compile() {
     
     local cc="gcc"
     local output="demo"
-    local cflags="-Wall -Wextra -std=c99"
+    local cflags="-Wall -Wextra -std=c99 -Wno-unused-parameter -Wno-cast-function-type"
     local quickjs_include=""
     local quickjs_lib=""
     

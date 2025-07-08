@@ -56,6 +56,7 @@ char* read_file_content(const char* filename) {
 
 // console.log 实现
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)this_val; // 明确表示不使用此参数
     for (int i = 0; i < argc; i++) {
         const char* str = JS_ToCString(ctx, argv[i]);
         if (str) {
