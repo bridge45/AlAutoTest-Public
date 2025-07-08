@@ -37,6 +37,20 @@ RUN cd /tmp && \
     rm -rf /tmp/quickjs-2021-03-27* && \
     echo "QuickJS 安装完成"
 
+# 安装 BearSSL
+RUN cd /tmp && \
+    wget -q https://bearssl.org/bearssl-0.6.tar.gz && \
+    tar -xf bearssl-0.6.tar.gz && \
+    cd bearssl-0.6 && \
+    make clean && \
+    make CC=arm-linux-gnueabihf-gcc build/libbearssl.a && \
+    mkdir -p /opt/bearssl && \
+    cp inc/*.h /opt/bearssl/ && \
+    cp build/libbearssl.a /opt/bearssl/ && \
+    cd / && \
+    rm -rf /tmp/bearssl-0.6* && \
+    echo "BearSSL 安装完成"
+
 # 设置工作目录
 WORKDIR /workspace
 
@@ -45,7 +59,8 @@ WORKDIR /workspace
 ENV ARM_CC="arm-linux-gnueabihf-gcc"
 ENV ARM_CXX="arm-linux-gnueabihf-g++"
 ENV QUICKJS_ROOT="/opt/quickjs"
-ENV PATH="/opt/quickjs:$PATH"
+ENV BEARSSL_ROOT="/opt/bearssl"
+ENV PATH="/opt/quickjs:/opt/bearssl:$PATH"
 
 # 默认命令
 CMD ["/bin/bash"] 
