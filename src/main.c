@@ -15,6 +15,9 @@
 #include <errno.h>
 #define _GNU_SOURCE
 
+// 添加必要的函数声明
+char* strdup(const char* str);
+
 // libmicrohttpd 头文件（条件编译）
 #ifdef MICROHTTPD_AVAILABLE
 #include <microhttpd.h>
@@ -40,10 +43,12 @@ static char console_output[8192] = ""; // 存储console.log输出
 
 // 信号处理函数
 static void signal_handler(int sig) {
+#ifdef MICROHTTPD_AVAILABLE
     if (g_daemon != NULL) {
         MHD_stop_daemon(g_daemon);
         g_daemon = NULL;
     }
+#endif
     exit(0);
 }
 
@@ -323,13 +328,37 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
                 char* result = execute_javascript(js_content, filepath);
                 free(js_content);
                 
-                // 构建JSON响应
-                char* json_response = malloc(strlen(result) + 100);
-                snprintf(json_response, strlen(result) + 100,
-                    "{\"status\":\"success\",\"file\":\"%s\",\"data\":%s}",
-                    js_file, result);
-                response_data = json_response;
-                free(result);
+                // 解析JSON并提取return和console
+                char* return_start = strstr(result, "\"return\":\"");
+                char* console_start = strstr(result, "\"console\":\"");
+                
+                if (return_start && console_start) {
+                    return_start += 10; // 跳过 "return":"
+                    console_start += 11; // 跳过 "console":"
+                    
+                    char* return_end = strchr(return_start, '"');
+                    char* console_end = strrchr(console_start, '"');
+                    
+                    if (return_end && console_end) {
+                        *return_end = '\0';
+                        *console_end = '\0';
+                        
+                        // 如果return是undefined，只输出console
+                        if (strcmp(return_start, "undefined") == 0) {
+                            response_data = strdup(console_start);
+                        } else {
+                            // 构建最终输出: return + 换行符 + console
+                            int total_len = strlen(return_start) + 1 + strlen(console_start) + 1;
+                            char* final_output = malloc(total_len);
+                            snprintf(final_output, total_len, "%s\n%s", return_start, console_start);
+                            response_data = final_output;
+                        }
+                    } else {
+                        response_data = result;
+                    }
+                } else {
+                    response_data = result;
+                }
             } else {
                 response_data = strdup("{\"status\":\"error\",\"message\":\"无法读取JS文件\"}");
                 status_code = 500;
@@ -344,17 +373,9 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
                                               response_data,
                                               MHD_RESPMEM_MUST_FREE);
     
-    if (strncmp(url, "/js/", 4) == 0) {
-        MHD_add_response_header(response, "Content-Type", "application/json; charset=utf-8");
-    } else if (strstr(url, ".js")) {
-        MHD_add_response_header(response, "Content-Type", "application/javascript; charset=utf-8");
-    } else if (strstr(url, ".html")) {
-        MHD_add_response_header(response, "Content-Type", "text/html; charset=utf-8");
-    } else if (strstr(url, ".css")) {
-        MHD_add_response_header(response, "Content-Type", "text/css; charset=utf-8");
-    } else {
-        MHD_add_response_header(response, "Content-Type", "text/plain; charset=utf-8");
-    }
+    
+    
+                                              MHD_add_response_header(response, "Content-Type", "text/html; charset=utf-8");
     
     MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
     
