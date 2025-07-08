@@ -19,7 +19,62 @@ jobs:
     - name: 构建 Docker 镜像
       run: |
         echo "🐳 构建 Docker 镜像..."
-        docker build -t alautotest:latest ./docker
+        # 创建一个临时的Dockerfile，不复制项目文件
+        cat > docker/Dockerfile.temp << 'EOF'
+        FROM ubuntu:20.04
+        
+        # 设置环境变量
+        ENV DEBIAN_FRONTEND=noninteractive
+        ENV TZ=Asia/Shanghai
+        
+        # 安装ARM交叉编译工具链和开发工具
+        RUN apt-get update && apt-get install -y \
+            build-essential \
+            gcc-arm-linux-gnueabihf \
+            g++-arm-linux-gnueabihf \
+            binutils-arm-linux-gnueabihf \
+            qemu-user-static \
+            qemu-user \
+            make \
+            vim \
+            git \
+            wget \
+            pkg-config \
+            libtool \
+            autoconf \
+            automake \
+            && rm -rf /var/lib/apt/lists/*
+        
+        # 安装 QuickJS
+        RUN cd /tmp && \
+            wget -q https://bellard.org/quickjs/quickjs-2021-03-27.tar.xz && \
+            tar -xf quickjs-2021-03-27.tar.xz && \
+            cd quickjs-2021-03-27 && \
+            make && \
+            mkdir -p /opt/quickjs && \
+            cp quickjs.h /opt/quickjs/ && \
+            cp quickjs-libc.h /opt/quickjs/ && \
+            cp libquickjs.a /opt/quickjs/ && \
+            cp qjs /opt/quickjs/ && \
+            cp qjsc /opt/quickjs/ && \
+            cd / && \
+            rm -rf /tmp/quickjs-2021-03-27* && \
+            echo "QuickJS 安装完成"
+        
+        # 设置工作目录
+        WORKDIR /workspace
+        
+        # 设置环境变量
+        ENV ARM_CC="arm-linux-gnueabihf-gcc"
+        ENV ARM_CXX="arm-linux-gnueabihf-g++"
+        ENV QUICKJS_ROOT="/opt/quickjs"
+        ENV PATH="/opt/quickjs:$PATH"
+        
+        # 默认命令
+        CMD ["/bin/bash"]
+        EOF
+        
+        docker build -t alautotest:latest -f docker/Dockerfile.temp .
         echo "✅ Docker 镜像构建完成"
         
     - name: 缓存编译产物
@@ -60,11 +115,23 @@ jobs:
               export QUICKJS_ROOT='/opt/quickjs'
               export PATH='/opt/quickjs:$PATH'
               
+              echo '设置脚本执行权限...'
+              chmod +x run.sh build.sh dev.sh test_quickjs.sh tmp_install_quickjs.sh
+              
               echo '开始编译 ARMv7 版本...'
+              echo '当前目录内容:'
+              ls -la
+              echo 'run.sh 内容预览:'
+              head -10 run.sh
+              echo '执行编译...'
               ./run.sh --arm
               
               echo '编译完成，检查结果...'
               ls -la demo*
+              echo '文件类型检查:'
+              file demo* 2>/dev/null || echo '无demo文件'
+              echo '查找所有demo文件:'
+              find . -name "demo*" -type f 2>/dev/null || echo '未找到demo文件'
             "
         fi
         echo "----------------------------------------"
