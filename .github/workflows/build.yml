@@ -4,13 +4,14 @@
 
 name: Build ARMv7 Binary
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  release:
-    types: [published]
+# 已禁用 - 使用 run-test.yml 替代
+# on:
+#   push:
+#     branches: [ main, master ]
+#   pull_request:
+#     branches: [ main, master ]
+#   release:
+#     types: [published]
 
 jobs:
   build:

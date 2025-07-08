@@ -4,18 +4,19 @@
 
 name: Build, Test and Debug ARMv7 Binary
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
-    inputs:
-      debug_mode:
-        description: '启用调试模式'
-        required: false
-        default: 'false'
-        type: boolean
+# 已禁用 - 使用 run-test.yml 替代
+# on:
+#   push:
+#     branches: [ main, master ]
+#   pull_request:
+#     branches: [ main, master ]
+#   workflow_dispatch:
+#     inputs:
+#       debug_mode:
+#         description: '启用调试模式'
+#         required: false
+#         default: 'false'
+#         type: boolean
 
 jobs:
   build-and-test:

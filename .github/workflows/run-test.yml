@@ -58,8 +58,18 @@ jobs:
     - name: 安装 QuickJS
       run: |
         echo "🔧 安装 QuickJS..."
+        echo "当前目录: $(pwd)"
+        echo "脚本内容预览:"
+        head -20 tmp_install_quickjs.sh
+        echo ""
+        echo "开始执行安装脚本..."
         ./tmp_install_quickjs.sh
         echo "✅ QuickJS 安装完成"
+        
+        echo "检查安装结果:"
+        ls -la /tmp/quickjs_install/ 2>/dev/null || echo "安装目录不存在"
+        ls -la /tmp/quickjs_install/include/ 2>/dev/null || echo "include目录不存在"
+        ls -la /tmp/quickjs_install/lib/ 2>/dev/null || echo "lib目录不存在"
         
     - name: 验证 QuickJS 安装
       run: |
@@ -67,26 +77,38 @@ jobs:
         export QUICKJS_ROOT="/tmp/quickjs_install"
         export PATH="$QUICKJS_ROOT/bin:$PATH"
         
+        echo "检查安装目录结构:"
+        find /tmp/quickjs_install -type f 2>/dev/null | head -20 || echo "安装目录不存在"
+        
         if [ -f "$QUICKJS_ROOT/bin/qjs" ]; then
           echo "✅ QuickJS 可执行文件存在"
           echo "版本信息:"
           $QUICKJS_ROOT/bin/qjs --version
         else
           echo "❌ QuickJS 可执行文件不存在"
+          echo "查找qjs文件:"
+          find /tmp -name "qjs" 2>/dev/null || echo "未找到qjs文件"
           exit 1
         fi
         
         if [ -f "$QUICKJS_ROOT/include/quickjs.h" ]; then
           echo "✅ QuickJS 头文件存在"
+          echo "头文件内容预览:"
+          head -5 "$QUICKJS_ROOT/include/quickjs.h"
         else
           echo "❌ QuickJS 头文件不存在"
+          echo "查找quickjs.h文件:"
+          find /tmp -name "quickjs.h" 2>/dev/null || echo "未找到quickjs.h文件"
           exit 1
         fi
         
         if [ -f "$QUICKJS_ROOT/lib/libquickjs.a" ]; then
           echo "✅ QuickJS 库文件存在"
+          echo "库文件大小: $(stat -c%s $QUICKJS_ROOT/lib/libquickjs.a) 字节"
         else
           echo "❌ QuickJS 库文件不存在"
+          echo "查找libquickjs.a文件:"
+          find /tmp -name "libquickjs.a" 2>/dev/null || echo "未找到libquickjs.a文件"
           exit 1
         fi
         

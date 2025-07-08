@@ -62,6 +62,11 @@ else
     cd "quickjs-${QUICKJS_VERSION}"
 fi
 
+# 安装到临时位置
+INSTALL_DIR="/tmp/quickjs_install"
+echo "安装到临时位置: $INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+
 # 编译 QuickJS
 echo "编译 QuickJS..."
 make
@@ -79,9 +84,6 @@ if command -v arm-linux-gnueabihf-gcc &> /dev/null; then
 else
     echo "未检测到 ARM 交叉编译工具链，跳过 ARMv7 版本编译"
 fi
-
-# 安装到临时位置
-INSTALL_DIR="/tmp/quickjs_install"
 echo "安装到临时位置: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 
