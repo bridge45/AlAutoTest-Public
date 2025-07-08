@@ -126,23 +126,32 @@ jobs:
         echo "QUICKJS_ROOT=$QUICKJS_ROOT"
         echo "PATH=$PATH"
         
-        ./run.sh
+        # 编译ARMv7版本
+        ./run.sh --arm
         echo "----------------------------------------"
         echo "✅ run.sh 脚本执行完成"
         
     - name: 验证输出文件
       run: |
         echo "🔍 验证编译输出..."
+        if [ -f "demo_armv7" ]; then
+          echo "✅ ARMv7版本编译成功: demo_armv7"
+          echo "文件大小: $(stat -c%s demo_armv7) 字节"
+          file demo_armv7
+          echo "架构信息:"
+          readelf -h demo_armv7 | grep -E "(Machine|Class|Data)"
+        else
+          echo "❌ ARMv7版本编译失败: demo_armv7 文件不存在"
+          exit 1
+        fi
+        
+        # 检查是否有本地版本（可选）
         if [ -f "demo" ]; then
           echo "✅ 本地版本编译成功: demo"
           echo "文件大小: $(stat -c%s demo) 字节"
           file demo
-        fi
-        
-        if [ -f "demo_armv7" ]; then
-          echo "✅ ARM版本编译成功: demo_armv7"
-          echo "文件大小: $(stat -c%s demo_armv7) 字节"
-          file demo_armv7
+        else
+          echo "⚠️  本地版本未编译（这是正常的，因为我们主要编译ARMv7版本）"
         fi
         
     - name: 上传构建产物

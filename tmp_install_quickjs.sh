@@ -75,7 +75,15 @@ make
 if command -v arm-linux-gnueabihf-gcc &> /dev/null; then
     echo "检测到 ARM 交叉编译工具链，编译 ARMv7 版本..."
     make clean
-    make CC=arm-linux-gnueabihf-gcc CFLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard"
+    
+    # 手动编译ARMv7版本的QuickJS，避免Makefile问题
+    echo "手动编译ARMv7版本的QuickJS..."
+    arm-linux-gnueabihf-gcc -c -march=armv7-a -mfpu=neon -mfloat-abi=hard \
+        -DCONFIG_VERSION="2021-03-27" \
+        -DCONFIG_CHECK_JSVALUE \
+        -o quickjs.o quickjs.c
+    
+    arm-linux-gnueabihf-ar rcs libquickjs.a quickjs.o
     
     # 创建 ARMv7 版本的库文件
     mkdir -p "$INSTALL_DIR/lib/armv7"
