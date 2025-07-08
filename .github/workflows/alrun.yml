@@ -36,6 +36,7 @@ jobs:
         tags: alautotest:latest
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+        outputs: type=docker
 
     - name: 确认本地镜像已构建
       run: |
