@@ -43,6 +43,10 @@ check_dependencies() {
 
 compile_arm() {
     print_info "编译 ARMv7 版本..."
+    
+    # 清理之前的二进制文件
+    rm -f build/demo_armv7
+    
     local cc="arm-linux-gnueabihf-gcc"
     local output="build/demo_armv7"
     local cflags="-Wall -Wextra -O2 -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-unused-parameter -Wno-cast-function-type"
@@ -50,6 +54,8 @@ compile_arm() {
     local quickjs_lib=""
     local bearssl_include=""
     local bearssl_lib=""
+    local microhttpd_include=""
+    local microhttpd_lib=""
     
     if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
         if [ -f "$QUICKJS_ROOT/quickjs.h" ] && [ -f "$QUICKJS_ROOT/libquickjs.a" ]; then
@@ -81,10 +87,33 @@ compile_arm() {
     else
         print_warning "未检测到 BearSSL 环境，将编译不包含 HTTPS 功能的版本"
     fi
+    
+    if [ -n "$LIBMICROHTTPD_ROOT" ] && [ -d "$LIBMICROHTTPD_ROOT" ]; then
+        if [ -f "$LIBMICROHTTPD_ROOT/include/microhttpd.h" ] && [ -f "$LIBMICROHTTPD_ROOT/lib/libmicrohttpd.a" ]; then
+            microhttpd_include="-I$LIBMICROHTTPD_ROOT/include"
+            microhttpd_lib="-L$LIBMICROHTTPD_ROOT/lib -lmicrohttpd"
+            cflags="$cflags -DMICROHTTPD_AVAILABLE"
+            print_info "检测到 libmicrohttpd: $LIBMICROHTTPD_ROOT/include/microhttpd.h, $LIBMICROHTTPD_ROOT/lib/libmicrohttpd.a"
+        elif [ -f "$LIBMICROHTTPD_ROOT/microhttpd.h" ] && [ -f "$LIBMICROHTTPD_ROOT/libmicrohttpd.a" ]; then
+            microhttpd_include="-I$LIBMICROHTTPD_ROOT"
+            microhttpd_lib="-L$LIBMICROHTTPD_ROOT -lmicrohttpd"
+            cflags="$cflags -DMICROHTTPD_AVAILABLE"
+            print_info "检测到 libmicrohttpd: $LIBMICROHTTPD_ROOT/microhttpd.h, $LIBMICROHTTPD_ROOT/libmicrohttpd.a"
+        else
+            print_warning "libmicrohttpd 头文件或库文件不存在"
+        fi
+    else
+        print_warning "未检测到 libmicrohttpd 环境，将编译不包含 Web 服务器功能的版本"
+    fi
+    
     mkdir -p build
-    $cc $cflags $quickjs_include $bearssl_include -o $output src/main.c -lm $quickjs_lib $bearssl_lib
-    print_success "编译完成: $output"
-    echo "$output"
+    if $cc $cflags $quickjs_include $bearssl_include $microhttpd_include -o $output src/main.c $quickjs_lib $bearssl_lib $microhttpd_lib -lm -lpthread; then
+        print_success "编译完成: $output"
+        echo "$output"
+    else
+        print_error "编译失败"
+        exit 1
+    fi
 }
 
 run_program() {
