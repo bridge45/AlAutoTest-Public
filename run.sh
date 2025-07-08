@@ -98,13 +98,33 @@ compile() {
         cflags="$cflags -march=armv7-a -mfpu=neon -mfloat-abi=hard"
         
         # 检查 ARMv7 版本的 QuickJS
-        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ] && [ -f "$QUICKJS_ROOT/lib/armv7/libquickjs.a" ]; then
-            quickjs_include="-I$QUICKJS_ROOT"
-            quickjs_lib="-L$QUICKJS_ROOT/lib/armv7 -lquickjs"
-            cflags="$cflags -DQUICKJS_AVAILABLE"
-            print_info "检测到 ARMv7 QuickJS 环境: $QUICKJS_ROOT"
+        print_debug "检查 QuickJS 环境:"
+        print_debug "QUICKJS_ROOT=$QUICKJS_ROOT"
+        print_debug "检查目录: $QUICKJS_ROOT"
+        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+            print_debug "QuickJS 根目录存在"
+            print_debug "检查 ARMv7 库文件: $QUICKJS_ROOT/lib/armv7/libquickjs.a"
+            if [ -f "$QUICKJS_ROOT/lib/armv7/libquickjs.a" ]; then
+                print_debug "ARMv7 QuickJS 库文件存在"
+                quickjs_include="-I$QUICKJS_ROOT"
+                quickjs_lib="-L$QUICKJS_ROOT/lib/armv7 -lquickjs"
+                cflags="$cflags -DQUICKJS_AVAILABLE"
+                print_info "检测到 ARMv7 QuickJS 环境: $QUICKJS_ROOT"
+            else
+                print_debug "ARMv7 QuickJS 库文件不存在"
+                print_debug "检查标准库文件: $QUICKJS_ROOT/lib/libquickjs.a"
+                if [ -f "$QUICKJS_ROOT/lib/libquickjs.a" ]; then
+                    print_debug "标准 QuickJS 库文件存在，尝试使用"
+                    quickjs_include="-I$QUICKJS_ROOT"
+                    quickjs_lib="-L$QUICKJS_ROOT/lib -lquickjs"
+                    cflags="$cflags -DQUICKJS_AVAILABLE"
+                    print_info "使用标准 QuickJS 环境进行 ARMv7 编译: $QUICKJS_ROOT"
+                else
+                    print_warning "未检测到 QuickJS 库文件，将编译不包含 JavaScript 功能的版本"
+                fi
+            fi
         else
-            print_warning "未检测到 ARMv7 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
+            print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
         fi
     else
         # 检查 QuickJS 环境（本地版本）
