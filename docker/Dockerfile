@@ -27,13 +27,12 @@ RUN cd /tmp && \
     wget -q https://bellard.org/quickjs/quickjs-2021-03-27.tar.xz && \
     tar -xf quickjs-2021-03-27.tar.xz && \
     cd quickjs-2021-03-27 && \
-    make && \
+    make clean && \
+    make CC=arm-linux-gnueabihf-gcc libquickjs.a && \
     mkdir -p /opt/quickjs && \
     cp quickjs.h /opt/quickjs/ && \
     cp quickjs-libc.h /opt/quickjs/ && \
     cp libquickjs.a /opt/quickjs/ && \
-    cp qjs /opt/quickjs/ && \
-    cp qjsc /opt/quickjs/ && \
     cd / && \
     rm -rf /tmp/quickjs-2021-03-27* && \
     echo "QuickJS 安装完成"

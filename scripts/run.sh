@@ -1,11 +1,8 @@
 #!/bin/bash
 
-# 运行脚本 - 编译并执行程序
-# 使用方法: ./run.sh [选项]
-
+# 运行脚本 - 仅编译并执行 ARMv7 版本
 set -e
 
-# 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -13,260 +10,96 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# 打印函数
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}" >&2; }
 print_success() { echo -e "${GREEN}✅ $1${NC}" >&2; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
 print_error() { echo -e "${RED}❌ $1${NC}" >&2; }
-print_debug() { echo -e "${CYAN}🐛 $1${NC}" >&2; }
 
-# 显示帮助
 show_help() {
-    echo "运行脚本 - 编译并执行程序"
+    echo "运行脚本 - 仅编译并执行 ARMv7 版本"
     echo ""
-    echo "使用方法: $0 [选项]"
-    echo ""
-    echo "选项:"
-    echo "  --arm      编译并运行ARM版本"
-    echo "  --native   编译并运行本地版本 (默认)"
-    echo "  --debug    调试模式编译并运行"
-    echo "  --clean    运行前清理旧文件"
-    echo "  --watch    监视模式 (文件变化时自动重新编译运行)"
+    echo "用法: $0 [--clean] [--help]"
+    echo "  --clean    清理构建文件"
     echo "  --help     显示帮助"
     echo ""
     echo "示例:"
-    echo "  $0                    # 编译并运行本地版本"
-    echo "  $0 --arm              # 编译并运行ARM版本"
-    echo "  $0 --debug            # 调试模式"
-    echo "  $0 --clean            # 清理后运行"
-    echo "  $0 --watch            # 监视模式"
+    echo "  $0           # 编译并运行 ARMv7 版本"
+    echo "  $0 --clean   # 清理后编译运行"
 }
 
-# 检查依赖
 check_dependencies() {
-    local target=$1
-    
-    if [ "$target" = "arm" ]; then
-        if ! command -v arm-linux-gnueabihf-gcc &> /dev/null; then
-            print_error "ARM交叉编译工具链未安装"
-            print_info "请安装: sudo apt-get install gcc-arm-linux-gnueabihf"
-            return 1
-        fi
-        if ! command -v qemu-arm &> /dev/null; then
-            print_error "QEMU未安装，无法运行ARM版本"
-            print_info "请安装: sudo apt-get install qemu-user-static"
-            return 1
-        fi
-    else
-        if ! command -v gcc &> /dev/null; then
-            print_error "GCC编译器未安装"
-            print_info "请安装GCC编译器"
-            return 1
-        fi
+    if ! command -v arm-linux-gnueabihf-gcc &> /dev/null; then
+        print_error "ARM交叉编译工具链未安装"
+        print_info "请安装: sudo apt-get install gcc-arm-linux-gnueabihf"
+        return 1
     fi
-    
-    # 检查 QuickJS
-    if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
-        if [ -f "$QUICKJS_ROOT/libquickjs.a" ] && [ -f "$QUICKJS_ROOT/quickjs.h" ]; then
-            print_success "QuickJS 环境检查通过: $QUICKJS_ROOT"
-        else
-            print_warning "QuickJS 环境不完整，某些文件缺失"
-        fi
-    else
-        print_warning "未检测到 QuickJS 环境变量或目录"
+    if ! command -v qemu-arm &> /dev/null; then
+        print_error "QEMU未安装，无法运行ARM版本"
+        print_info "请安装: sudo apt-get install qemu-user-static"
+        return 1
     fi
-    
     return 0
 }
 
-# 编译
-compile() {
-    local target=${1:-native}
-    local debug=${2:-false}
-    
-    print_info "编译 $target 版本..."
-    
-    local cc="gcc"
-    local output="build/demo"
-    local cflags="-Wall -Wextra -std=c99 -Wno-unused-parameter -Wno-cast-function-type"
+compile_arm() {
+    print_info "编译 ARMv7 版本..."
+    local cc="arm-linux-gnueabihf-gcc"
+    local output="build/demo_armv7"
+    local cflags="-Wall -Wextra -O2 -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-unused-parameter -Wno-cast-function-type"
     local quickjs_include=""
     local quickjs_lib=""
-    
-    if [ "$target" = "arm" ]; then
-        cc="arm-linux-gnueabihf-gcc"
-        output="build/demo_armv7"
-        cflags="$cflags -march=armv7-a -mfpu=neon -mfloat-abi=hard"
-        
-        # 检查 ARMv7 版本的 QuickJS
-        print_debug "检查 QuickJS 环境:"
-        print_debug "QUICKJS_ROOT=$QUICKJS_ROOT"
-        print_debug "检查目录: $QUICKJS_ROOT"
-        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
-            print_debug "QuickJS 根目录存在"
-            print_debug "检查 ARMv7 库文件: $QUICKJS_ROOT/lib/armv7/libquickjs.a"
-            if [ -f "$QUICKJS_ROOT/lib/armv7/libquickjs.a" ]; then
-                print_debug "ARMv7 QuickJS 库文件存在"
-                quickjs_include="-I$QUICKJS_ROOT"
-                quickjs_lib="-L$QUICKJS_ROOT/lib/armv7 -lquickjs"
-                cflags="$cflags -DQUICKJS_AVAILABLE"
-                print_info "检测到 ARMv7 QuickJS 环境: $QUICKJS_ROOT"
-            else
-                print_debug "ARMv7 QuickJS 库文件不存在"
-                print_debug "检查标准库文件: $QUICKJS_ROOT/lib/libquickjs.a"
-                if [ -f "$QUICKJS_ROOT/lib/libquickjs.a" ]; then
-                    print_debug "标准 QuickJS 库文件存在，尝试使用"
-                    quickjs_include="-I$QUICKJS_ROOT"
-                    quickjs_lib="-L$QUICKJS_ROOT/lib -lquickjs"
-                    cflags="$cflags -DQUICKJS_AVAILABLE"
-                    print_info "使用标准 QuickJS 环境进行 ARMv7 编译: $QUICKJS_ROOT"
-                else
-                    print_warning "未检测到 QuickJS 库文件，将编译不包含 JavaScript 功能的版本"
-                fi
-            fi
-        else
-            print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
-        fi
-    else
-        # 检查 QuickJS 环境（本地版本）
-        if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+    if [ -n "$QUICKJS_ROOT" ] && [ -d "$QUICKJS_ROOT" ]; then
+        if [ -f "$QUICKJS_ROOT/quickjs.h" ] && [ -f "$QUICKJS_ROOT/libquickjs.a" ]; then
             quickjs_include="-I$QUICKJS_ROOT"
             quickjs_lib="-L$QUICKJS_ROOT -lquickjs"
             cflags="$cflags -DQUICKJS_AVAILABLE"
-            print_info "检测到 QuickJS 环境: $QUICKJS_ROOT"
+            print_info "检测到 QuickJS: $QUICKJS_ROOT/quickjs.h, $QUICKJS_ROOT/libquickjs.a"
+        elif [ -f "$QUICKJS_ROOT/include/quickjs.h" ] && [ -f "$QUICKJS_ROOT/lib/libquickjs.a" ]; then
+            quickjs_include="-I$QUICKJS_ROOT/include"
+            quickjs_lib="-L$QUICKJS_ROOT/lib -lquickjs"
+            cflags="$cflags -DQUICKJS_AVAILABLE"
+            print_info "检测到 QuickJS: $QUICKJS_ROOT/include/quickjs.h, $QUICKJS_ROOT/lib/libquickjs.a"
         else
-            print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
+            print_warning "QuickJS 头文件或库文件不存在: $QUICKJS_ROOT/quickjs.h 或 $QUICKJS_ROOT/libquickjs.a，也不存在 $QUICKJS_ROOT/include/quickjs.h 或 $QUICKJS_ROOT/lib/libquickjs.a"
         fi
-    fi
-    
-    if [ "$debug" = "true" ]; then
-        cflags="$cflags -g -O0 -DDEBUG"
-        output="${output}_debug"
     else
-        cflags="$cflags -O2"
+        print_warning "未检测到 QuickJS 环境，将编译不包含 JavaScript 功能的版本"
     fi
-    
     mkdir -p build
-    print_debug "编译器: $cc"
-    print_debug "输出文件: $output"
-    print_debug "编译选项: $cflags"
-    print_debug "QuickJS 包含路径: $quickjs_include"
-    print_debug "QuickJS 库: $quickjs_lib"
-    
     $cc $cflags $quickjs_include -o $output src/main.c -lm $quickjs_lib
-    
     print_success "编译完成: $output"
-    echo "文件大小: $(stat -c%s $output 2>/dev/null || stat -f%z $output 2>/dev/null) 字节" >&2
-    
-    # 返回输出文件名
     echo "$output"
 }
 
-# 运行程序
 run_program() {
     local output=$1
-    local target=${2:-native}
-    
     print_info "运行程序: $output"
     echo "----------------------------------------"
-    
     chmod +x "$output"
-    
-    if [ "$target" = "arm" ]; then
-        # ARM版本使用QEMU运行
-        timeout 30s qemu-arm -L /usr/arm-linux-gnueabihf "$output" || {
-            local exit_code=$?
-            if [ $exit_code -eq 124 ]; then
-                print_warning "程序执行超时 (30秒)"
-            else
-                print_warning "程序执行完成，退出码: $exit_code"
-            fi
-        }
-    else
-        # 本地版本直接运行
-        timeout 30s "./$output" || {
-            local exit_code=$?
-            if [ $exit_code -eq 124 ]; then
-                print_warning "程序执行超时 (30秒)"
-            else
-                print_warning "程序执行完成，退出码: $exit_code"
-            fi
-        }
-    fi
-    
+    timeout 30s qemu-arm -L /usr/arm-linux-gnueabihf "$output" || {
+        local exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+            print_warning "程序执行超时 (30秒)"
+        else
+            print_warning "程序执行完成，退出码: $exit_code"
+        fi
+    }
     echo "----------------------------------------"
     print_success "程序执行完成"
 }
 
-# 清理
 clean() {
     print_info "清理构建文件..."
-    rm -f demo demo_debug demo_armv7 demo_armv7_debug
+    rm -f build/demo_armv7
     print_success "清理完成"
 }
 
-# 监视模式
-watch_mode() {
-    local target=${1:-native}
-    local debug=${2:-false}
-    
-    print_info "监视模式启动 (Ctrl+C 退出)..."
-    print_info "监视文件: src/main.c"
-    print_info "目标平台: $target"
-    if [ "$debug" = "true" ]; then
-        print_info "调试模式: 启用"
-    fi
-    
-    local last_modified=0
-    
-    while true; do
-        local current_modified=$(stat -c%Y src/main.c 2>/dev/null || stat -f%m src/main.c 2>/dev/null)
-        
-        if [ "$current_modified" != "$last_modified" ]; then
-            echo ""
-            print_info "检测到文件变化，重新编译运行..."
-            
-            # 编译
-            local output=$(compile $target $debug)
-            
-            # 运行
-            run_program $output $target
-            
-            last_modified=$current_modified
-            echo ""
-        fi
-        
-        sleep 1
-    done
-}
-
-# 主函数
 main() {
-    local target="native"
-    local debug="false"
     local clean_before="false"
-    local watch_mode="false"
-    
-    # 解析参数
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --arm)
-                target="arm"
-                shift
-                ;;
-            --native)
-                target="native"
-                shift
-                ;;
-            --debug)
-                debug="true"
-                shift
-                ;;
             --clean)
                 clean_before="true"
-                shift
-                ;;
-            --watch)
-                watch_mode="true"
                 shift
                 ;;
             --help|-h)
@@ -280,29 +113,14 @@ main() {
                 ;;
         esac
     done
-    
-    # 检查依赖
-    if ! check_dependencies $target; then
+    if ! check_dependencies; then
         exit 1
     fi
-    
-    # 清理
     if [ "$clean_before" = "true" ]; then
         clean
     fi
-    
-    # 监视模式
-    if [ "$watch_mode" = "true" ]; then
-        watch_mode $target $debug
-        exit 0
-    fi
-    
-    # 编译
-    local output=$(compile $target $debug)
-    
-    # 运行
-    run_program $output $target
+    local output=$(compile_arm)
+    run_program $output
 }
 
-# 运行主函数
 main "$@" 

@@ -37,6 +37,10 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
+    - name: 确认本地镜像已构建
+      run: |
+        docker images | grep alautotest || (echo "镜像未构建成功" && exit 1)
+
     - name: 在 Docker 容器中执行 scripts/run.sh
       run: |
         echo "🚀 在 Docker 容器中执行 scripts/run.sh..."

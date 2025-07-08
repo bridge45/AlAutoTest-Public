@@ -171,17 +171,17 @@ int main() {
     printf("\n=== QuickJS 测试 ===\n");
     
     // 读取并执行 test.js
-    char* js_content = read_file_content("scripts/test.js");
+    char* js_content = read_file_content("worker/test.js");
     if (js_content) {
-        printf("执行 scripts/test.js 文件:\n");
-        if (execute_javascript(js_content, "scripts/test.js") == 0) {
+        printf("执行 worker/test.js 文件:\n");
+        if (execute_javascript(js_content, "worker/test.js") == 0) {
             printf("JavaScript 执行成功!\n");
         } else {
             printf("JavaScript 执行失败!\n");
         }
         free(js_content);
     } else {
-        printf("无法读取 scripts/test.js 文件，执行内联 JavaScript 测试:\n");
+        printf("无法读取 worker/test.js 文件，执行内联 JavaScript 测试:\n");
         
         // 执行内联 JavaScript 代码
         const char* inline_js = 
