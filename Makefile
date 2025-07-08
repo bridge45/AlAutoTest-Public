@@ -18,8 +18,8 @@ LDFLAGS = -L$(QUICKJS_LIB) -lquickjs -lm
 ARM_LDFLAGS = -L$(QUICKJS_LIB) -lquickjs -lm
 
 # 目标文件
-TARGET = demo
-ARM_TARGET = demo_armv7
+TARGET = build/demo
+ARM_TARGET = build/demo_armv7
 
 # 源文件
 SOURCES = main.c
@@ -29,17 +29,19 @@ all: $(TARGET) $(ARM_TARGET)
 
 # 本地编译
 $(TARGET): $(SOURCES)
+	@mkdir -p build
 	@echo "编译本地版本..."
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # ARMv7 交叉编译
 $(ARM_TARGET): $(SOURCES)
+	@mkdir -p build
 	@echo "编译 ARMv7 版本..."
 	$(ARM_CC) $(ARM_CFLAGS) -o $@ $^ $(ARM_LDFLAGS)
 
 # 清理
 clean:
-	rm -f $(TARGET) $(ARM_TARGET)
+	rm -f build/demo build/demo_armv7
 
 # 安装依赖 (Ubuntu/Debian)
 install-deps:

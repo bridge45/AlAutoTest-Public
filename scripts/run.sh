@@ -87,14 +87,14 @@ compile() {
     print_info "编译 $target 版本..."
     
     local cc="gcc"
-    local output="demo"
+    local output="build/demo"
     local cflags="-Wall -Wextra -std=c99 -Wno-unused-parameter -Wno-cast-function-type"
     local quickjs_include=""
     local quickjs_lib=""
     
     if [ "$target" = "arm" ]; then
         cc="arm-linux-gnueabihf-gcc"
-        output="demo_armv7"
+        output="build/demo_armv7"
         cflags="$cflags -march=armv7-a -mfpu=neon -mfloat-abi=hard"
         
         # 检查 ARMv7 版本的 QuickJS
@@ -145,6 +145,7 @@ compile() {
         cflags="$cflags -O2"
     fi
     
+    mkdir -p build
     print_debug "编译器: $cc"
     print_debug "输出文件: $output"
     print_debug "编译选项: $cflags"
