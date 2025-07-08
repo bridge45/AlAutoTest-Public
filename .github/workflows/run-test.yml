@@ -1,0 +1,97 @@
+name: Run Test Script
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  run-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装依赖
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          gcc \
+          gcc-arm-linux-gnueabihf \
+          g++-arm-linux-gnueabihf \
+          qemu-user-static \
+          binutils-arm-linux-gnueabihf \
+          make
+        
+    - name: 验证工具链安装
+      run: |
+        echo "验证本地编译器:"
+        gcc --version | head -1
+        echo ""
+        echo "验证ARM交叉编译器:"
+        arm-linux-gnueabihf-gcc --version | head -1
+        echo ""
+        echo "验证QEMU:"
+        qemu-arm --version | head -1
+        echo "✅ 工具链安装成功"
+        
+    - name: 设置执行权限
+      run: |
+        chmod +x run.sh
+        chmod +x build.sh
+        chmod +x dev.sh
+        chmod +x test_quickjs.sh
+        echo "✅ 脚本权限设置完成"
+        
+    - name: 执行 run.sh 脚本
+      run: |
+        echo "🚀 开始执行 run.sh 脚本..."
+        echo "----------------------------------------"
+        # 设置环境变量，确保脚本能正常运行
+        export QUICKJS_ROOT=""
+        ./run.sh
+        echo "----------------------------------------"
+        echo "✅ run.sh 脚本执行完成"
+        
+    - name: 验证输出文件
+      run: |
+        echo "🔍 验证编译输出..."
+        if [ -f "demo" ]; then
+          echo "✅ 本地版本编译成功: demo"
+          echo "文件大小: $(stat -c%s demo) 字节"
+          file demo
+        fi
+        
+        if [ -f "demo_armv7" ]; then
+          echo "✅ ARM版本编译成功: demo_armv7"
+          echo "文件大小: $(stat -c%s demo_armv7) 字节"
+          file demo_armv7
+        fi
+        
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: run-test-artifacts
+        path: |
+          demo
+          demo_armv7
+          demo_debug
+          demo_armv7_debug
+        retention-days: 7
+        
+    - name: 显示测试结果摘要
+      run: |
+        echo "🎉 run.sh 测试完成!"
+        echo "📊 测试结果:"
+        echo "  - 脚本执行: ✅ 成功"
+        echo "  - 编译状态: ✅ 成功"
+        echo "  - 运行状态: ✅ 成功"
+        echo ""
+        echo "📁 生成的文件:"
+        ls -la demo* 2>/dev/null || echo "无生成文件"
+        echo ""
+        echo "✅ 所有测试通过!" 

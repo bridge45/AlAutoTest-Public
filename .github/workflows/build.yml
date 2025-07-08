@@ -1,3 +1,7 @@
+# 注意: 此workflow已被 run-test.yml 替代
+# 新的workflow直接执行 run.sh 脚本进行测试
+# 如需使用此workflow，请手动触发或修改触发器
+
 name: Build ARMv7 Binary
 
 on:

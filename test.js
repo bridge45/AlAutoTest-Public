@@ -53,4 +53,4 @@ testString();
 testArray();
 testObject();
 
-console.log("\n=== 测试完成AAAAAAAAAAA ==="); 
+console.log("\n=== 测试完成V1.3 ==="); 
