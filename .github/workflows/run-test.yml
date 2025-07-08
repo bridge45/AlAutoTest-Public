@@ -163,7 +163,7 @@ jobs:
               echo '执行命令: qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7'
               echo '----------------------------------------'
               echo '程序输出:'
-              timeout 30s qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 2>&1 || {
+              timeout 30s qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7 || {
                 exit_code=\$?
                 if [ \$exit_code -eq 124 ]; then
                   echo '⚠️  测试运行超时（30秒）'
@@ -194,7 +194,12 @@ jobs:
             bash -c "
               echo '完整执行 ARMv7 程序...'
               echo '========================================'
+              echo '执行命令: qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7'
+              echo '程序输出开始:'
+              echo '----------------------------------------'
               qemu-arm -L /usr/arm-linux-gnueabihf demo_armv7
+              echo '----------------------------------------'
+              echo '程序输出结束'
               echo '========================================'
               echo '程序执行完成'
             "
