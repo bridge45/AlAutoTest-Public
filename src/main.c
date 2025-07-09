@@ -13,6 +13,8 @@
 #include <strings.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <execinfo.h>
 #define _GNU_SOURCE
 
 // 添加必要的函数声明
@@ -33,13 +35,27 @@ char* strdup(const char* str);
 #include "bearssl.h"
 #endif
 
-#define PORT 8080
+// #define PORT 8080  // 注释掉宏定义
 #define WORKER_DIR "worker"
 
 // 全局变量
 static char* js_result = NULL;
 static struct MHD_Daemon *g_daemon = NULL;
 static char console_output[8192] = ""; // 存储console.log输出
+static char worker_dir[256] = WORKER_DIR; // 新增全局 worker_dir
+
+// 新增端口检测和放行函数
+int is_port_allowed(int port) {
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "iptables -C INPUT -p tcp --dport %d -j ACCEPT > /dev/null 2>&1", port);
+    int ret = system(cmd);
+    return ret == 0;
+}
+void allow_port(int port) {
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "iptables -A INPUT -p tcp --dport %d -j ACCEPT", port);
+    system(cmd);
+}
 
 // 信号处理函数
 static void signal_handler(int sig) {
@@ -402,7 +418,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "%s/%s", WORKER_DIR, js_file);
+        snprintf(filepath, sizeof(filepath), "%s/%s", worker_dir, js_file);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -446,7 +462,9 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
                 status_code = 500;
             }
         } else {
-            response_data = strdup("{\"status\":\"error\",\"message\":\"JS文件不存在\"}");
+            char notfound_msg[600];
+            snprintf(notfound_msg, sizeof(notfound_msg), "{\"status\":\"error\",\"message\":\"JS文件不存在: %s\"}", filepath);
+            response_data = strdup(notfound_msg);
             status_code = 404;
         }
     }
@@ -468,13 +486,38 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
 }
 #endif
 
+void segfault_handler(int sig) {
+    void *array[20];
+    size_t size = backtrace(array, 20);
+    fprintf(stderr, "捕获到信号 %d (Segmentation fault)，调用栈如下：\n", sig);
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+    exit(1);
+}
+
 // 主函数
-int main() {
+int main(int argc, char **argv) {
+    signal(SIGSEGV, segfault_handler);
+    printf("输入参数: ");
+    for (int i = 0; i < argc; ++i) {
+        printf("%s ", argv[i]);
+    }
+    printf("\n");
+    int port = 8080;
+    // 解析参数
+    for (int i = 1; i < argc - 1; ++i) {
+        if (strcmp(argv[i], "--port") == 0) {
+            port = atoi(argv[i + 1]);
+        }
+        if (strcmp(argv[i], "--wdir") == 0) {
+            strncpy(worker_dir, argv[i + 1], sizeof(worker_dir) - 1);
+            worker_dir[sizeof(worker_dir) - 1] = '\0';
+        }
+    }
     printf("=== ARMv7 Web Server with QuickJS ===\n");
     printf("编译时间: %s %s\n", __DATE__, __TIME__);
     printf("目标架构: ARMv7\n");
-    printf("Web服务端口: %d\n", PORT);
-    printf("工作目录: %s\n\n", WORKER_DIR);
+    printf("Web服务端口: %d\n", port);
+    printf("工作目录: %s\n\n", worker_dir);
     
     char version[32] = "unknown";
     FILE *vf = fopen("../version", "r");
@@ -493,8 +536,14 @@ int main() {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
+    // 检查端口防火墙规则
+    if (!is_port_allowed(port)) {
+        printf("检测到端口未放行，自动执行放行...\n");
+        allow_port(port);
+    }
+    
     // 创建HTTP服务器
-    g_daemon = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION, PORT, NULL, NULL,
+    g_daemon = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION, port, NULL, NULL,
                                &request_handler, NULL, MHD_OPTION_CONNECTION_TIMEOUT, 5, MHD_OPTION_END);
     
     if (g_daemon == NULL) {
@@ -502,9 +551,9 @@ int main() {
         return 1;
     }
     
-    printf("HTTP服务器已启动，监听端口 %d\n", PORT);
-    printf("访问 http://localhost:%d 查看服务\n", PORT);
-    printf("访问 http://localhost:%d/js/文件名.js 执行JS文件\n", PORT);
+    printf("HTTP服务器已启动，监听端口 %d\n", port);
+    printf("访问 http://localhost:%d 查看服务\n", port);
+    printf("访问 http://localhost:%d/js/文件名.js 执行JS文件\n", port);
     printf("按 Ctrl+C 停止服务器\n");
     
     // 检查worker目录
@@ -522,7 +571,7 @@ int main() {
     }
     
     char worker_path[512];
-    snprintf(worker_path, sizeof(worker_path), "%s/%s", cwd, WORKER_DIR);
+    snprintf(worker_path, sizeof(worker_path), "%s", worker_dir);
     printf("Worker目录路径: %s\n", worker_path);
     
     if (file_exists(worker_path)) {

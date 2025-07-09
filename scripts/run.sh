@@ -49,7 +49,7 @@ compile_arm() {
     
     local cc="arm-linux-gnueabihf-gcc"
     local output="build/demo_armv7"
-    local cflags="-Wall -Wextra -O2 -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-unused-parameter -Wno-cast-function-type"
+    local cflags="-g -Wall -Wextra -O2 -std=c99 -march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-unused-parameter -Wno-cast-function-type"
     local quickjs_include=""
     local quickjs_lib=""
     local bearssl_include=""
