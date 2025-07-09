@@ -494,8 +494,8 @@ int main() {
     signal(SIGTERM, signal_handler);
     
     // 创建HTTP服务器
-    g_daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, PORT, NULL, NULL,
-                               &request_handler, NULL, MHD_OPTION_END);
+    g_daemon = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION, PORT, NULL, NULL,
+                               &request_handler, NULL, MHD_OPTION_CONNECTION_TIMEOUT, 5, MHD_OPTION_END);
     
     if (g_daemon == NULL) {
         fprintf(stderr, "无法启动HTTP服务器\n");
