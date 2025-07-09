@@ -108,6 +108,84 @@ static JSValue js_https_request(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_NULL;
 }
 
+// shell_exec 实现
+static JSValue js_shell_exec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    (void)this_val;
+    if (argc < 1) {
+        return JS_EXCEPTION;
+    }
+    
+    const char* command = JS_ToCString(ctx, argv[0]);
+    if (!command) {
+        return JS_EXCEPTION;
+    }
+    
+    // 创建管道
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        JS_FreeCString(ctx, command);
+        return JS_NULL;
+    }
+    
+    // 创建子进程
+    pid_t pid = fork();
+    if (pid == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        JS_FreeCString(ctx, command);
+        return JS_NULL;
+    }
+    
+    if (pid == 0) {
+        // 子进程
+        close(pipefd[0]); // 关闭读端
+        dup2(pipefd[1], STDOUT_FILENO); // 重定向标准输出
+        dup2(pipefd[1], STDERR_FILENO); // 重定向标准错误
+        close(pipefd[1]);
+        
+        // 执行命令
+        execl("/bin/sh", "sh", "-c", command, NULL);
+        exit(1);
+    } else {
+        // 父进程
+        close(pipefd[1]); // 关闭写端
+        
+        // 读取输出
+        char buffer[4096];
+        char* output = malloc(8192);
+        output[0] = '\0';
+        int total_size = 0;
+        
+        ssize_t bytes_read;
+        while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+            buffer[bytes_read] = '\0';
+            strcat(output, buffer);
+            total_size += bytes_read;
+            
+            if (total_size > 8000) break;
+        }
+        
+        close(pipefd[0]);
+        
+        // 等待子进程结束
+        int status;
+        waitpid(pid, &status, 0);
+        
+        // 检查退出状态
+        int exit_code = WEXITSTATUS(status);
+        
+        // 创建返回对象
+        JSValue result_obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, result_obj, "output", JS_NewString(ctx, output));
+        JS_SetPropertyStr(ctx, result_obj, "exitCode", JS_NewInt32(ctx, exit_code));
+        JS_SetPropertyStr(ctx, result_obj, "success", JS_NewBool(ctx, exit_code == 0));
+        
+        free(output);
+        JS_FreeCString(ctx, command);
+        return result_obj;
+    }
+}
+
 #ifdef BEARSSL_AVAILABLE
 // HTTPS 请求函数实现
 char* https_request(const char* host, const char* path, int port) {
@@ -199,6 +277,10 @@ char* execute_javascript(const char* js_code, const char* filename) {
     // 添加 https_request 函数到全局对象
     JS_SetPropertyStr(ctx, global_obj, "https_request", 
         JS_NewCFunction(ctx, js_https_request, "https_request", 3));
+    
+    // 添加 shell_exec 函数到全局对象
+    JS_SetPropertyStr(ctx, global_obj, "shell_exec", 
+        JS_NewCFunction(ctx, js_shell_exec, "shell_exec", 1));
     
     JS_FreeValue(ctx, global_obj);
     
