@@ -107,7 +107,7 @@ compile_arm() {
     fi
     
     mkdir -p build
-    if $cc $cflags $quickjs_include $bearssl_include $microhttpd_include -o $output src/main.c $quickjs_lib $bearssl_lib $microhttpd_lib -lm -lpthread; then
+    if $cc -static $cflags $quickjs_include $bearssl_include $microhttpd_include -o $output src/main.c $quickjs_lib $bearssl_lib $microhttpd_lib -lm -lpthread; then
         print_success "编译完成: $output"
         echo "$output"
     else
