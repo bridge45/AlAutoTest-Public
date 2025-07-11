@@ -12,3 +12,6 @@ docker exec -it armv7-dev bash
 目标设备启动
  /tmp/demo_armv7 --port 8083  --wdir /config/worker
   /tmp/demo_armv7 --port 8083  --wdir /tmp
+
+
+qemu-arm -L /usr/arm-linux-gnueabihf build/demo_armv7 

@@ -125,10 +125,10 @@ run_program() {
     print_info "运行程序: $output"
     echo "----------------------------------------"
     chmod +x "$output"
-    timeout 30s qemu-arm -L /usr/arm-linux-gnueabihf "$output" || {
+    timeout 60s qemu-arm -L /usr/arm-linux-gnueabihf "$output" || {
         local exit_code=$?
         if [ $exit_code -eq 124 ]; then
-            print_warning "程序执行超时 (30秒)"
+            print_warning "程序执行超时 (60秒)"
         else
             print_warning "程序执行完成，退出码: $exit_code"
         fi

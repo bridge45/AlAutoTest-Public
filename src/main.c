@@ -83,17 +83,29 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
         const char* str = JS_ToCString(ctx, argv[i]);
         if (str) {
             printf("%s", str);
-            // 同时追加到console_output
-            strncat(console_output, str, sizeof(console_output) - strlen(console_output) - 1);
+            // 检查缓冲区空间并安全追加到console_output
+            size_t current_len = strlen(console_output);
+            size_t remaining_space = sizeof(console_output) - current_len - 1;
+            if (remaining_space > 0) {
+                strncat(console_output, str, remaining_space);
+            }
             JS_FreeCString(ctx, str);
         }
         if (i < argc - 1) {
             printf(" ");
-            strncat(console_output, " ", sizeof(console_output) - strlen(console_output) - 1);
+            size_t current_len = strlen(console_output);
+            size_t remaining_space = sizeof(console_output) - current_len - 1;
+            if (remaining_space > 0) {
+                strncat(console_output, " ", remaining_space);
+            }
         }
     }
     printf("\n");
-    strncat(console_output, "\n", sizeof(console_output) - strlen(console_output) - 1);
+    size_t current_len = strlen(console_output);
+    size_t remaining_space = sizeof(console_output) - current_len - 1;
+    if (remaining_space > 0) {
+        strncat(console_output, "\n", remaining_space);
+    }
     return JS_UNDEFINED;
 }
 
@@ -179,7 +191,11 @@ static JSValue js_shell_exec(JSContext *ctx, JSValueConst this_val, int argc, JS
         ssize_t bytes_read;
         while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytes_read] = '\0';
-            strcat(output, buffer);
+            size_t current_len = strlen(output);
+            size_t remaining_space = 8192 - current_len - 1;
+            if (remaining_space > 0) {
+                strncat(output, buffer, remaining_space);
+            }
             total_size += bytes_read;
             
             if (total_size > 8000) break;
@@ -371,7 +387,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "/tmp/third_bin/%s", js_file);
+        snprintf(filepath, sizeof(filepath), "%s/%s", worker_dir, js_file);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -543,7 +559,7 @@ int main(int argc, char **argv) {
     }
     
     char worker_path[512];
-    snprintf(worker_path, sizeof(worker_path), "/tmp/third_bin/%s", worker_dir);
+    snprintf(worker_path, sizeof(worker_path), "%s", worker_dir);
     printf("Worker目录路径: %s\n", worker_path);
     
     if (file_exists(worker_path)) {
