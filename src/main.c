@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <execinfo.h>
+#include <fcntl.h>
 #define _GNU_SOURCE
 
 // 添加必要的函数声明
@@ -34,6 +35,9 @@ char* strdup(const char* str);
 #ifdef BEARSSL_AVAILABLE
 #include "bearssl.h"
 #endif
+
+// 自动包含资源头文件
+#include "resources/resource_list.h"
 
 // #define PORT 8080  // 注释掉宏定义
 #define WORKER_DIR "worker"
@@ -205,58 +209,7 @@ static JSValue js_shell_exec(JSContext *ctx, JSValueConst this_val, int argc, JS
 #ifdef BEARSSL_AVAILABLE
 // HTTPS 请求函数实现
 char* https_request(const char* host, const char* path, int port) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        return NULL;
-    }
-    
-    struct hostent *server = gethostbyname(host);
-    if (server == NULL) {
-        close(sock);
-        return NULL;
-    }
-    
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    memcpy(&server_addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
-    
-    if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        close(sock);
-        return NULL;
-    }
-    
-    // 构建HTTP请求
-    char request[1024];
-    snprintf(request, sizeof(request),
-        "GET %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Connection: close\r\n"
-        "\r\n", path, host);
-    
-    if (send(sock, request, strlen(request), 0) < 0) {
-        close(sock);
-        return NULL;
-    }
-    
-    // 接收响应
-    char buffer[4096];
-    char* response = malloc(8192);
-    response[0] = '\0';
-    int total_size = 0;
-    
-    int bytes_received;
-    while ((bytes_received = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
-        buffer[bytes_received] = '\0';
-        strcat(response, buffer);
-        total_size += bytes_received;
-        
-        if (total_size > 8000) break;
-    }
-    
-    close(sock);
-    return response;
+    return NULL;
 }
 #else
 // BearSSL不可用时的占位函数
@@ -418,7 +371,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "%s/%s", worker_dir, js_file);
+        snprintf(filepath, sizeof(filepath), "/tmp/third_bin/%s", js_file);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -496,6 +449,25 @@ void segfault_handler(int sig) {
 
 // 主函数
 int main(int argc, char **argv) {
+    // 资源释放到 /tmp/third_bin/
+    const char *out_dir = "/tmp/third_bin";
+    struct stat st = {0};
+    if (stat(out_dir, &st) == -1) {
+        mkdir(out_dir, 0700);
+    }
+    for (size_t i = 0; i < get_resources_count(); ++i) {
+        char out_path[512];
+        Resource* resources = get_resources();
+        snprintf(out_path, sizeof(out_path), "%s/%s", out_dir, resources[i].name);
+        if (stat(out_path, &st) == -1) {
+            int fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+            if (fd >= 0) {
+                write(fd, resources[i].data, resources[i].len);
+                close(fd);
+                chmod(out_path, 0755);
+            }
+        }
+    }
     signal(SIGSEGV, segfault_handler);
     printf("输入参数: ");
     for (int i = 0; i < argc; ++i) {
@@ -571,7 +543,7 @@ int main(int argc, char **argv) {
     }
     
     char worker_path[512];
-    snprintf(worker_path, sizeof(worker_path), "%s", worker_dir);
+    snprintf(worker_path, sizeof(worker_path), "/tmp/third_bin/%s", worker_dir);
     printf("Worker目录路径: %s\n", worker_path);
     
     if (file_exists(worker_path)) {

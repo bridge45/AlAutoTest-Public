@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# 设置项目根目录（脚本所在位置的上级目录）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # 运行脚本 - 仅编译并执行 ARMv7 版本
 set -e
 
@@ -107,7 +111,7 @@ compile_arm() {
     fi
     
     mkdir -p build
-    if $cc -static $cflags $quickjs_include $bearssl_include $microhttpd_include -o $output src/main.c $quickjs_lib $bearssl_lib $microhttpd_lib -lm -lpthread; then
+    if $cc -static $cflags $quickjs_include $bearssl_include $microhttpd_include -o $output src/main.c "$PROJECT_ROOT/src/resources"/*.c $quickjs_lib $bearssl_lib $microhttpd_lib -lm -lpthread; then
         print_success "编译完成: $output"
         echo "$output"
     else
@@ -138,6 +142,67 @@ clean() {
     rm -f build/demo_armv7
     print_success "清理完成"
 }
+
+# 资源生成函数
+generate_resources() {
+    # 确保资源目录始终存在
+    mkdir -p "$PROJECT_ROOT/src/resources"
+    
+    # 自动生成资源文件
+    if [ -d "$PROJECT_ROOT/third_bin" ] && [ "$(ls -A "$PROJECT_ROOT/third_bin")" ]; then
+        rm -f "$PROJECT_ROOT/src/resources"/*.c "$PROJECT_ROOT/src/resources"/resource_list.*
+        RESOURCE_LIST_H="$PROJECT_ROOT/src/resources/resource_list.h"
+        RESOURCE_LIST_C="$PROJECT_ROOT/src/resources/resource_list.c"
+
+        echo "#pragma once" > "$RESOURCE_LIST_H"
+        echo "#include <stddef.h>" >> "$RESOURCE_LIST_H"
+        echo "#include <stdlib.h>" >> "$RESOURCE_LIST_H"
+        echo "typedef struct { const char* name; const unsigned char* data; size_t len; } Resource;" >> "$RESOURCE_LIST_H"
+        echo "void init_resources();" >> "$RESOURCE_LIST_H"
+        echo "Resource* get_resources();" >> "$RESOURCE_LIST_H"
+        echo "size_t get_resources_count();" >> "$RESOURCE_LIST_H"
+
+        echo "#include \"resource_list.h\"" > "$RESOURCE_LIST_C"
+        
+        # 先声明所有外部变量
+        for f in "$PROJECT_ROOT/third_bin"/*; do
+          fname=$(basename "$f")
+          arrname=$(echo "$fname" | tr . _ | tr - _)
+          echo "extern unsigned char ${arrname}[];" >> "$RESOURCE_LIST_C"
+          echo "extern unsigned int ${arrname}_len;" >> "$RESOURCE_LIST_C"
+        done
+        
+        echo "static Resource* resources = NULL;" >> "$RESOURCE_LIST_C"
+        echo "static size_t resources_count = 0;" >> "$RESOURCE_LIST_C"
+        echo "void init_resources() {" >> "$RESOURCE_LIST_C"
+        echo "  if (resources) return;" >> "$RESOURCE_LIST_C"
+        echo "  resources_count = 0;" >> "$RESOURCE_LIST_C"
+        for f in "$PROJECT_ROOT/third_bin"/*; do
+          echo "  resources_count++;" >> "$RESOURCE_LIST_C"
+        done
+        echo "  resources = malloc(sizeof(Resource) * resources_count);" >> "$RESOURCE_LIST_C"
+        echo "  int idx = 0;" >> "$RESOURCE_LIST_C"
+        for f in "$PROJECT_ROOT/third_bin"/*; do
+          fname=$(basename "$f")
+          arrname=$(echo "$fname" | tr . _ | tr - _)
+          xxd -i "$f" | sed "s/unsigned char .*\[\]/unsigned char ${arrname}[]/" | sed "s/unsigned int .*_len/unsigned int ${arrname}_len/" > "$PROJECT_ROOT/src/resources/$fname.c"
+          echo "  resources[idx].name = \"$fname\";" >> "$RESOURCE_LIST_C"
+          echo "  resources[idx].data = ${arrname};" >> "$RESOURCE_LIST_C"
+          echo "  resources[idx].len = ${arrname}_len;" >> "$RESOURCE_LIST_C"
+          echo "  idx++;" >> "$RESOURCE_LIST_C"
+          echo "extern unsigned char ${arrname}[];" >> "$RESOURCE_LIST_H"
+          echo "extern unsigned int ${arrname}_len;" >> "$RESOURCE_LIST_H"
+        done
+        echo "}" >> "$RESOURCE_LIST_C"
+        echo "Resource* get_resources() { if (!resources) init_resources(); return resources; }" >> "$RESOURCE_LIST_C"
+        echo "size_t get_resources_count() { if (!resources) init_resources(); return resources_count; }" >> "$RESOURCE_LIST_C"
+    else
+        echo "third_bin 目录不存在或为空，跳过资源打包。"
+    fi
+}
+
+# 脚本最前面调用
+generate_resources
 
 main() {
     local clean_before="false"
