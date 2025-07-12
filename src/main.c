@@ -38,7 +38,7 @@ char* strdup(const char* str);
 #include "resources/resource_list.h"
 
 // #define PORT 8080  // 注释掉宏定义
-#define WORKER_DIR "worker"
+#define WORKER_DIR "."
 
 // 全局变量
 static char* js_result = NULL;
@@ -349,7 +349,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "/tmp/third_bin/%s", js_file);
+        snprintf(filepath, sizeof(filepath), "%s/worker/%s", worker_dir, js_file);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -463,6 +463,13 @@ int main(int argc, char **argv) {
             worker_dir[sizeof(worker_dir) - 1] = '\0';
         }
     }
+    
+    // 如果没有指定 --wdir，使用当前工作目录
+    if (strcmp(worker_dir, ".") == 0) {
+        if (getcwd(worker_dir, sizeof(worker_dir)) == NULL) {
+            strcpy(worker_dir, ".");
+        }
+    }
     printf("=== ARMv7 Web Server with QuickJS ===\n");
     printf("编译时间: %s %s\n", __DATE__, __TIME__);
     printf("目标架构: ARMv7\n");
@@ -503,7 +510,7 @@ int main(int argc, char **argv) {
     
     printf("HTTP服务器已启动，监听端口 %d\n", port);
     printf("访问 http://localhost:%d 查看服务\n", port);
-    printf("访问 http://localhost:%d/js/文件名.js 执行JS文件\n", port);
+    printf("访问 http://localhost:%d/文件名.js 执行JS文件\n", port);
     printf("按 Ctrl+C 停止服务器\n");
     
     // 检查worker目录
@@ -521,7 +528,7 @@ int main(int argc, char **argv) {
     }
     
     char worker_path[512];
-    snprintf(worker_path, sizeof(worker_path), "/tmp/third_bin/%s", worker_dir);
+    snprintf(worker_path, sizeof(worker_path), "%s", worker_dir);
     printf("Worker目录路径: %s\n", worker_path);
     
     if (file_exists(worker_path)) {
