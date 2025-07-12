@@ -541,4 +541,5 @@ int main(int argc, char **argv) {
     printf("请确保已正确安装 libmicrohttpd\n");
 #endif
     return 0;
-} 
+}
+#endif
