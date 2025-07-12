@@ -31,10 +31,8 @@ char* strdup(const char* str);
 #include "quickjs.h"
 #endif
 
-// BearSSL 头文件（条件编译）
-#ifdef BEARSSL_AVAILABLE
-#include "bearssl.h"
-#endif
+// 自动包含资源头文件
+#include "resources/resource_list.h"
 
 // 自动包含资源头文件
 #include "resources/resource_list.h"
@@ -72,9 +70,6 @@ static void signal_handler(int sig) {
     exit(0);
 }
 
-// HTTPS 请求函数声明
-char* https_request(const char* host, const char* path, int port);
-
 // console.log 实现
 #ifdef QUICKJS_AVAILABLE
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -107,37 +102,6 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
         strncat(console_output, "\n", remaining_space);
     }
     return JS_UNDEFINED;
-}
-
-// https_request 实现
-static JSValue js_https_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    (void)this_val;
-    if (argc < 3) {
-        return JS_EXCEPTION;
-    }
-    
-    const char* host = JS_ToCString(ctx, argv[0]);
-    const char* path = JS_ToCString(ctx, argv[1]);
-    int port;
-    JS_ToInt32(ctx, &port, argv[2]);
-    
-    if (!host || !path) {
-        if (host) JS_FreeCString(ctx, host);
-        if (path) JS_FreeCString(ctx, path);
-        return JS_EXCEPTION;
-    }
-    
-    char* response = https_request(host, path, port);
-    JS_FreeCString(ctx, host);
-    JS_FreeCString(ctx, path);
-    
-    if (response) {
-        JSValue result = JS_NewString(ctx, response);
-        free(response);
-        return result;
-    }
-    
-    return JS_NULL;
 }
 
 // shell_exec 实现
@@ -218,6 +182,7 @@ static JSValue js_shell_exec(JSContext *ctx, JSValueConst this_val, int argc, JS
         
         free(output);
         JS_FreeCString(ctx, command);
+        
         return result_obj;
     }
 }
@@ -235,6 +200,7 @@ char* https_request(const char* host, const char* path, int port) {
 #endif
 
 // 执行 JavaScript 代码并返回结果
+#ifdef QUICKJS_AVAILABLE
 char* execute_javascript(const char* js_code, const char* filename) {
     // 清空console输出
     memset(console_output, 0, sizeof(console_output));
@@ -258,10 +224,6 @@ char* execute_javascript(const char* js_code, const char* filename) {
     JSValue console_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, console_obj, "log", JS_NewCFunction(ctx, js_console_log, "log", 1));
     JS_SetPropertyStr(ctx, global_obj, "console", console_obj);
-    
-    // 添加 https_request 函数到全局对象
-    JS_SetPropertyStr(ctx, global_obj, "https_request", 
-        JS_NewCFunction(ctx, js_https_request, "https_request", 3));
     
     // 添加 shell_exec 函数到全局对象
     JS_SetPropertyStr(ctx, global_obj, "shell_exec", 
@@ -387,7 +349,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "%s/%s", worker_dir, js_file);
+        snprintf(filepath, sizeof(filepath), "/tmp/third_bin/%s", js_file);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -559,7 +521,7 @@ int main(int argc, char **argv) {
     }
     
     char worker_path[512];
-    snprintf(worker_path, sizeof(worker_path), "%s", worker_dir);
+    snprintf(worker_path, sizeof(worker_path), "/tmp/third_bin/%s", worker_dir);
     printf("Worker目录路径: %s\n", worker_path);
     
     if (file_exists(worker_path)) {

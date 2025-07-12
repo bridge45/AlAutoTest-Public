@@ -37,34 +37,13 @@ RUN cd /tmp && \
     rm -rf /tmp/quickjs-2021-03-27* && \
     echo "QuickJS 安装完成"
 
-# 安装 BearSSL
-RUN cd /tmp && \
-    wget -q https://bearssl.org/bearssl-0.6.tar.gz && \
-    tar -xf bearssl-0.6.tar.gz && \
-    cd bearssl-0.6 && \
-    make clean && \
-    make CC=arm-linux-gnueabihf-gcc build/libbearssl.a && \
-    mkdir -p /opt/bearssl && \
-    cp inc/*.h /opt/bearssl/ && \
-    cp build/libbearssl.a /opt/bearssl/ && \
-    cd / && \
-    rm -rf /tmp/bearssl-0.6* && \
-    echo "BearSSL 安装完成"
-
-    RUN cd /tmp && \
-    wget --tries=3 --timeout=30 -q https://mirrors.tuna.tsinghua.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.76.tar.gz && \
-    tar -xf libmicrohttpd-0.9.76.tar.gz && \
-    cd libmicrohttpd-0.9.76 && \
-    ./configure --host=arm-linux-gnueabihf \
-                --enable-static \
-                --disable-shared \
-                --disable-https \
-                --disable-doc \
-                --disable-examples \
-                --disable-curl \
-                --prefix=/opt/libmicrohttpd && \
-    make clean && \
-    make -j$(nproc) && \
+# 安装 libmicrohttpd
+RUN echo "正在安装 libmicrohttpd..." && \
+    wget -q https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.75.tar.gz && \
+    tar -xf libmicrohttpd-0.9.75.tar.gz && \
+    cd libmicrohttpd-0.9.75 && \
+    ./configure --host=arm-linux-gnueabihf --prefix=/opt/libmicrohttpd --disable-shared --enable-static && \
+    make && \
     make install && \
     cd / && \
     rm -rf /tmp/libmicrohttpd-0.9.76* && \
@@ -78,9 +57,8 @@ WORKDIR /workspace
 ENV ARM_CC="arm-linux-gnueabihf-gcc"
 ENV ARM_CXX="arm-linux-gnueabihf-g++"
 ENV QUICKJS_ROOT="/opt/quickjs"
-ENV BEARSSL_ROOT="/opt/bearssl"
 ENV LIBMICROHTTPD_ROOT="/opt/libmicrohttpd"
-ENV PATH="/opt/quickjs:/opt/bearssl:/opt/libmicrohttpd/bin:$PATH"
+ENV PATH="/opt/quickjs:/opt/libmicrohttpd/bin:$PATH"
 
 # 默认命令
 CMD ["/bin/bash"] 
