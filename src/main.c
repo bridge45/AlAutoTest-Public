@@ -201,7 +201,7 @@ char* https_request(const char* host, const char* path, int port) {
 
 // 执行 JavaScript 代码并返回结果
 #ifdef QUICKJS_AVAILABLE
-char* execute_javascript(const char* js_code, const char* filename) {
+char* execute_javascript(const char* js_code, const char* filename, const char* params) {
     // 清空console输出
     memset(console_output, 0, sizeof(console_output));
     
@@ -228,6 +228,13 @@ char* execute_javascript(const char* js_code, const char* filename) {
     // 添加 shell_exec 函数到全局对象
     JS_SetPropertyStr(ctx, global_obj, "shell_exec", 
         JS_NewCFunction(ctx, js_shell_exec, "shell_exec", 1));
+    
+    // 添加 request_params 变量到全局对象
+    if (params && strlen(params) > 0) {
+        JS_SetPropertyStr(ctx, global_obj, "request_params", JS_NewString(ctx, params));
+    } else {
+        JS_SetPropertyStr(ctx, global_obj, "request_params", JS_NewString(ctx, ""));
+    }
     
     JS_FreeValue(ctx, global_obj);
     
@@ -273,7 +280,7 @@ char* execute_javascript(const char* js_code, const char* filename) {
 }
 #else
 // 当QuickJS不可用时的占位函数
-char* execute_javascript(const char* js_code, const char* filename) {
+char* execute_javascript(const char* js_code, const char* filename, const char* params) {
     return strdup("QuickJS 功能不可用");
 }
 #endif
@@ -312,6 +319,20 @@ int file_exists(const char* filename) {
     return 0;
 }
 
+// 构建查询参数字符串的回调函数
+static int build_query_string(void *cls, enum MHD_ValueKind kind, const char *key, const char *value) {
+    char* buffer = (char*)cls;
+    if (strlen(buffer) > 0) {
+        strcat(buffer, "&");
+    }
+    strcat(buffer, key);
+    if (value && strlen(value) > 0) {
+        strcat(buffer, "=");
+        strcat(buffer, value);
+    }
+    return MHD_YES;
+}
+
 #ifdef MICROHTTPD_AVAILABLE
 // HTTP 请求处理函数
 static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connection,
@@ -347,14 +368,33 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
     else {
         const char* js_file = url + 1; // 跳过开头的 "/"
         
+        // 获取查询参数
+        char params_buffer[1024] = "";
+        MHD_get_connection_values(connection, MHD_GET_ARGUMENT_KIND, 
+            (MHD_KeyValueIterator)&build_query_string, params_buffer);
+        
+        char* params = strdup(params_buffer);
+        
+        // 从js_file中移除查询参数部分
+        char js_filename[256];
+        strncpy(js_filename, js_file, sizeof(js_filename) - 1);
+        js_filename[sizeof(js_filename) - 1] = '\0';
+        
+        char* question_mark = strchr(js_filename, '?');
+        if (question_mark) {
+            *question_mark = '\0'; // 截断文件名部分
+        }
+        
+
+        
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "%s/worker/%s", worker_dir, js_file);
+        snprintf(filepath, sizeof(filepath), "%s/worker/%s", worker_dir, js_filename);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
             if (js_content) {
-                char* result = execute_javascript(js_content, filepath);
+                char* result = execute_javascript(js_content, filepath, params);
                 free(js_content);
                 
                 // 解析JSON并提取return和console
@@ -398,6 +438,8 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
             response_data = strdup(notfound_msg);
             status_code = 404;
         }
+        
+        free(params);
     }
     
     response = MHD_create_response_from_buffer(strlen(response_data),
