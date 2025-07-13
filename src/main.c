@@ -47,13 +47,24 @@ static char console_output[8192] = ""; // 存储console.log输出
 static char worker_dir[256] = WORKER_DIR; // 新增全局 worker_dir
 
 // 新增端口检测和放行函数
+int is_iptables_available() {
+    return system("which iptables > /dev/null 2>&1") == 0;
+}
+
 int is_port_allowed(int port) {
+    if (!is_iptables_available()) {
+        return 1; // 如果没有iptables，认为端口已放行
+    }
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "iptables -C INPUT -p tcp --dport %d -j ACCEPT > /dev/null 2>&1", port);
     int ret = system(cmd);
     return ret == 0;
 }
+
 void allow_port(int port) {
+    if (!is_iptables_available()) {
+        return; // 如果没有iptables，跳过端口放行
+    }
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "iptables -A INPUT -p tcp --dport %d -j ACCEPT", port);
     if (system(cmd) == -1) {
@@ -540,9 +551,13 @@ int main(int argc, char **argv) {
     signal(SIGTERM, signal_handler);
     
     // 检查端口防火墙规则
-    if (!is_port_allowed(port)) {
-        printf("检测到端口未放行，自动执行放行...\n");
-        allow_port(port);
+    if (is_iptables_available()) {
+        if (!is_port_allowed(port)) {
+            printf("检测到端口未放行，自动执行放行...\n");
+            allow_port(port);
+        }
+    } else {
+        printf("未检测到iptables，跳过端口放行检查\n");
     }
     
     // 创建HTTP服务器
