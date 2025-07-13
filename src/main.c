@@ -41,7 +41,7 @@ char* strdup(const char* str);
 #define WORKER_DIR "."
 
 // 全局变量
-static char* js_result = NULL;
+// static char* js_result = NULL;  // 未使用的变量，注释掉
 static struct MHD_Daemon *g_daemon = NULL;
 static char console_output[8192] = ""; // 存储console.log输出
 static char worker_dir[256] = WORKER_DIR; // 新增全局 worker_dir
@@ -56,7 +56,9 @@ int is_port_allowed(int port) {
 void allow_port(int port) {
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "iptables -A INPUT -p tcp --dport %d -j ACCEPT", port);
-    system(cmd);
+    if (system(cmd) == -1) {
+        // 忽略错误，继续执行
+    }
 }
 
 // 信号处理函数
@@ -389,7 +391,7 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         
         // 构建文件路径
         char filepath[512];
-        snprintf(filepath, sizeof(filepath), "%s/worker/%s", worker_dir, js_filename);
+        snprintf(filepath, sizeof(filepath), "%s/worker/%.*s", worker_dir, (int)(sizeof(filepath) - strlen(worker_dir) - 8), js_filename);
         
         if (file_exists(filepath)) {
             char* js_content = read_file_content(filepath);
@@ -482,7 +484,9 @@ int main(int argc, char **argv) {
         if (stat(out_path, &st) == -1) {
             int fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
             if (fd >= 0) {
-                write(fd, resources[i].data, resources[i].len);
+                if (write(fd, resources[i].data, resources[i].len) == -1) {
+                    // 忽略错误，继续执行
+                }
                 close(fd);
                 chmod(out_path, 0755);
             }
@@ -563,7 +567,9 @@ int main(int argc, char **argv) {
     
     // 如果当前在build目录，切换到上级目录
     if (strstr(cwd, "/build") != NULL) {
-        chdir("..");
+        if (chdir("..") == -1) {
+            // 忽略错误，继续执行
+        }
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             printf("切换到上级目录: %s\n", cwd);
         }
