@@ -347,27 +347,76 @@ static int build_query_string(void *cls, enum MHD_ValueKind kind, const char *ke
 }
 
 #ifdef MICROHTTPD_AVAILABLE
+// POST数据结构
+struct post_data {
+    char* data;
+    size_t size;
+    size_t allocated;
+};
+
 // HTTP 请求处理函数
 static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connection,
                           const char *url, const char *method,
                           const char *version, const char *upload_data,
                           size_t *upload_data_size, void **con_cls) {
-    static int dummy;
+    struct post_data* post = *con_cls;
     struct MHD_Response *response;
     int ret;
     
-    if (&dummy != *con_cls) {
-        *con_cls = &dummy;
+    if (post == NULL) {
+        post = malloc(sizeof(struct post_data));
+        post->data = NULL;
+        post->size = 0;
+        post->allocated = 0;
+        *con_cls = post;
+        printf("开始处理请求\n");
         return MHD_YES;
     }
     
-    if (0 != *upload_data_size)
-        return MHD_NO;
+    // 对于POST请求，需要等待数据接收完成
+    if (0 != *upload_data_size) {
+        printf("接收POST数据: %zu bytes\n", *upload_data_size);
+        
+        // 分配内存并复制数据
+        size_t new_size = post->size + *upload_data_size + 1;
+        
+        // 检查总大小限制
+        if (new_size > 1024 * 1024) { // 1MB限制
+            printf("POST数据过大: %zu bytes\n", new_size);
+            *upload_data_size = 0;
+            return MHD_YES;
+        }
+        
+        if (new_size > post->allocated) {
+            char* new_data = realloc(post->data, new_size);
+            if (new_data) {
+                post->data = new_data;
+                post->allocated = new_size;
+            } else {
+                printf("内存分配失败\n");
+                *upload_data_size = 0;
+                return MHD_YES;
+            }
+        }
+        
+        memcpy(post->data + post->size, upload_data, *upload_data_size);
+        post->size += *upload_data_size;
+        post->data[post->size] = '\0';
+        
+        *upload_data_size = 0;
+        return MHD_YES;
+    }
     
+    printf("请求处理完成，开始响应\n");
+    if (post->data) {
+        printf("POST数据: %s\n", post->data);
+    }
     *con_cls = NULL;
     
     char* response_data = NULL;
     int status_code = 200;
+    
+    printf("收到请求: %s %s\n", method, url);
     
     // 处理根路径
     if (strcmp(url, "/") == 0) {
@@ -386,7 +435,55 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
         MHD_get_connection_values(connection, MHD_GET_ARGUMENT_KIND, 
             (MHD_KeyValueIterator)&build_query_string, params_buffer);
         
+        // 获取POST参数
+        char post_params_buffer[1024] = "";
+        MHD_get_connection_values(connection, MHD_POSTDATA_KIND, 
+            (MHD_KeyValueIterator)&build_query_string, post_params_buffer);
+        
+        printf("GET参数: %s\n", params_buffer);
+        printf("POST参数: %s\n", post_params_buffer);
+        
+        // 合并GET和POST参数
         char* params = strdup(params_buffer);
+        if (!params) {
+            response_data = strdup("{\"status\":\"error\",\"message\":\"内存分配失败\"}");
+            status_code = 500;
+            goto cleanup;
+        }
+        
+        // 添加手动接收的POST数据
+        if (post && post->data && post->size > 0) {
+            // 限制POST数据大小，避免内存问题
+            if (post->size > 1024 * 1024) { // 1MB限制
+                response_data = strdup("{\"status\":\"error\",\"message\":\"POST数据过大，超过1MB限制\"}");
+                status_code = 413; // Request Entity Too Large
+                goto cleanup;
+            }
+            
+            size_t current_len = strlen(params);
+            size_t post_len = post->size;
+            char* new_params = realloc(params, current_len + post_len + 10);
+            if (new_params) {
+                params = new_params;
+                if (current_len > 0) {
+                    strcat(params, "&");
+                }
+                strcat(params, post->data);
+            }
+        } else if (strlen(params_buffer) > 0 && strlen(post_params_buffer) > 0) {
+            char* new_params = realloc(params, strlen(params) + strlen(post_params_buffer) + 2);
+            if (new_params) {
+                params = new_params;
+                strcat(params, "&");
+                strcat(params, post_params_buffer);
+            }
+        } else if (strlen(post_params_buffer) > 0) {
+            char* new_params = realloc(params, strlen(post_params_buffer) + 1);
+            if (new_params) {
+                params = new_params;
+                strcpy(params, post_params_buffer);
+            }
+        }
         
         // 从js_file中移除查询参数部分
         char js_filename[256];
@@ -410,36 +507,45 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
                 char* result = execute_javascript(js_content, filepath, params);
                 free(js_content);
                 
-                // 解析JSON并提取return和console
-                char* return_start = strstr(result, "\"return\":\"");
-                char* console_start = strstr(result, "\"console\":\"");
-                
-                if (return_start && console_start) {
-                    return_start += 10; // 跳过 "return":"
-                    console_start += 11; // 跳过 "console":"
+                if (result) {
+                    // 解析JSON并提取return和console
+                    char* return_start = strstr(result, "\"return\":\"");
+                    char* console_start = strstr(result, "\"console\":\"");
                     
-                    char* return_end = strchr(return_start, '"');
-                    char* console_end = strrchr(console_start, '"');
-                    
-                    if (return_end && console_end) {
-                        *return_end = '\0';
-                        *console_end = '\0';
+                    if (return_start && console_start) {
+                        return_start += 10; // 跳过 "return":"
+                        console_start += 11; // 跳过 "console":"
                         
-                        // 如果return是undefined，只输出console
-                        if (strcmp(return_start, "undefined") == 0) {
-                            response_data = strdup(console_start);
+                        char* return_end = strchr(return_start, '"');
+                        char* console_end = strrchr(console_start, '"');
+                        
+                        if (return_end && console_end) {
+                            *return_end = '\0';
+                            *console_end = '\0';
+                            
+                            // 如果return是undefined，只输出console
+                            if (strcmp(return_start, "undefined") == 0) {
+                                response_data = strdup(console_start);
+                            } else {
+                                // 构建最终输出: return + 换行符 + console
+                                int total_len = strlen(return_start) + 1 + strlen(console_start) + 1;
+                                char* final_output = malloc(total_len);
+                                if (final_output) {
+                                    snprintf(final_output, total_len, "%s\n%s", return_start, console_start);
+                                    response_data = final_output;
+                                } else {
+                                    response_data = strdup(console_start);
+                                }
+                            }
                         } else {
-                            // 构建最终输出: return + 换行符 + console
-                            int total_len = strlen(return_start) + 1 + strlen(console_start) + 1;
-                            char* final_output = malloc(total_len);
-                            snprintf(final_output, total_len, "%s\n%s", return_start, console_start);
-                            response_data = final_output;
+                            response_data = result;
                         }
                     } else {
                         response_data = result;
                     }
                 } else {
-                    response_data = result;
+                    response_data = strdup("{\"status\":\"error\",\"message\":\"JS执行失败\"}");
+                    status_code = 500;
                 }
             } else {
                 response_data = strdup("{\"status\":\"error\",\"message\":\"无法读取JS文件\"}");
@@ -452,7 +558,18 @@ static enum MHD_Result request_handler(void *cls, struct MHD_Connection *connect
             status_code = 404;
         }
         
-        free(params);
+cleanup:
+        if (params) {
+            free(params);
+        }
+        
+        // 清理POST数据
+        if (post) {
+            if (post->data) {
+                free(post->data);
+            }
+            free(post);
+        }
     }
     
     response = MHD_create_response_from_buffer(strlen(response_data),
@@ -562,7 +679,8 @@ int main(int argc, char **argv) {
     
     // 创建HTTP服务器
     g_daemon = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION, port, NULL, NULL,
-                               &request_handler, NULL, MHD_OPTION_CONNECTION_TIMEOUT, 5, MHD_OPTION_END);
+                               &request_handler, NULL, MHD_OPTION_CONNECTION_TIMEOUT, 5, 
+                               MHD_OPTION_END);
     
     if (g_daemon == NULL) {
         fprintf(stderr, "无法启动HTTP服务器\n");
