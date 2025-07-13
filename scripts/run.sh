@@ -108,14 +108,23 @@ run_program() {
     print_info "运行程序: $output"
     echo "----------------------------------------"
     chmod +x "$output"
-    timeout 60s qemu-arm -L /usr/arm-linux-gnueabihf "$output" || {
-        local exit_code=$?
-        if [ $exit_code -eq 124 ]; then
-            print_warning "程序执行超时 (60秒)"
-        else
-            print_warning "程序执行完成，退出码: $exit_code"
-        fi
-    }
+    
+    # 设置信号处理，确保 Ctrl+C 能正确传递给子进程
+    trap 'echo "收到中断信号，正在停止..."; kill -TERM $PID 2>/dev/null; exit 1' INT TERM
+    
+    timeout 60s qemu-arm -L /usr/arm-linux-gnueabihf "$output" &
+    PID=$!
+    wait $PID
+    local exit_code=$?
+    
+    if [ $exit_code -eq 124 ]; then
+        print_warning "程序执行超时 (60秒)"
+    elif [ $exit_code -eq 130 ]; then
+        print_warning "程序被中断 (Ctrl+C)"
+    else
+        print_warning "程序执行完成，退出码: $exit_code"
+    fi
+    
     echo "----------------------------------------"
     print_success "程序执行完成"
 }
